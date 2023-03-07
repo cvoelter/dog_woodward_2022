@@ -1,0 +1,19 @@
+---
+title: "Woodward 2022 - sample report"
+output: pdf_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(arrow)
+```
+
+
+
+```{r}
+sample.data<-read_parquet("data/Woodward2022_Sample_Report.parquet")
+```
+
+
