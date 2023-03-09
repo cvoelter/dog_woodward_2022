@@ -31,7 +31,7 @@ demo.data <- read_csv("data/Woodward_2022_counterbalancing.csv") %>%
 ```{r}
 first4s.data <-
   read_delim(
-    "data/Woodward2022_IP_Report_IP_test_first_4_sec.txt",
+    "data/Woodward2022_IA_Report_IP_test_first_4_sec.txt",
     na = ".",
     delim = "\t"
   ) %>%
