@@ -7,7 +7,8 @@ output: html_document
 notes: 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-rm(list=ls())
+#rm(list=ls())
+#remove(list=c("first4s.data_short"))
 library(tidyverse)
 library(summarytools)
 #library(exactRankTests)
@@ -115,7 +116,7 @@ first4s.data <-
   filter(ia_object == "elephant" | ia_object == "ball")
 
 first4s.data %>% select(subject, condition_trial, trial_type, IA_LABEL, IA_fam_object) 
-
+#IA_fam_object=what does the AOI looked at contain
 
 levels(as.factor(first4s.data$DATA_FILE))
 levels(as.factor(first4s.data$condition))
@@ -132,11 +133,13 @@ table(as.factor(first4s.data$DATA_FILE),
 
 ```{r}
 first4s.data.wider<-first4s.data%>%
-  select(subject, session.num,condition_trial, IA_LABEL, condition, agent_target_side_first, condition_first, session, trial_within_block, video_file,  video_latency, DATA_FILE,  IA_DWELL_TIME)%>%
-  pivot_wider(names_from = IA_LABEL, values_from=IA_DWELL_TIME)%>%
-  mutate(object_congruent_dwell_time=as.numeric(ifelse(target_location=="up",IA_lower_object, ifelse(target_location=="down",IA_upper_object, "") )), object_incongruent_dwell_time=as.numeric(ifelse(target_location=="up",IA_upper_object, ifelse(target_location=="down",IA_lower_object, "") )))%>%
-  select(-IA_lower_object, -IA_upper_object, -IA_agent)%>%
-  pivot_longer(cols=c(object_congruent_dwell_time, object_incongruent_dwell_time), names_to = "object_congruent", values_to = "dwell_time")
+  select(subject, session.num, condition_trial, Trial_Index_, IA_LABEL,  IA_fam_object, condition, trial_type, agent_target_side_first, condition_first, video_file,  DATA_FILE, IA_AREA, IA_DWELL_TIME, IA_FIXATION_COUNT)%>% #probably some time variable missing?
+  filter(condition != "fam") %>% #keep only test trials
+  filter(grepl("AL", IA_LABEL)) %>% #keep only AL AoIs (smaller)
+  pivot_wider(names_from = IA_fam_object, values_from=)%>% #IA_DWELL_TIME for dwell times
+  # mutate(object_congruent_dwell_time=as.numeric(ifelse(target_location=="up",IA_lower_object, ifelse(target_location=="down",IA_upper_object, "") )), object_incongruent_dwell_time=as.numeric(ifelse(target_location=="up",IA_upper_object, ifelse(target_location=="down",IA_lower_object, "") )))%>%
+  # select(-IA_lower_object, -IA_upper_object, -IA_agent)%>%
+  # pivot_longer(cols=c(object_congruent_dwell_time, object_incongruent_dwell_time), names_to = "object_congruent", values_to = "dwell_time")
 
 
 #checks:
