@@ -156,7 +156,7 @@ first4s.data.first.fix <- first4s.data %>%
                                                           ifelse(old_goal_new_side<new_goal_old_side, 1, 0)))) %>%
     separate(
     agent_target_side_first,
-    into = c("agent_first", "object_first", "side_first"),
+    into = c("agent_first", "object_first", "side_first"), #shown to the dog in the first session
     sep = "_"
   ) %>%
   mutate(session_number = as.numeric(session_number), session_withinagent = as.numeric(ifelse(session_number >=3, session_number-2, session_number)))
@@ -168,12 +168,32 @@ first4s.data.first.fix <- first4s.data %>%
 ## first fixation (binary model and no fixations are counted as 0)
 ```{r}
 
-first4s.data.first.fix$z.session<-as.vector(scale(as.numeric(first4s.data.first.fix$session_number), center = TRUE, scale=TRUE))
+first4s.data.first.fix$z.session <-
+  as.vector(scale(
+    as.numeric(first4s.data.first.fix$session_number),
+    center = TRUE,
+    scale = TRUE
+  ))
 
-first4s.data.first.fix$trialtype_agent <- as.factor(first4s.data.first.fix$trialtype_agent)
+first4s.data.first.fix$trialtype_agent <-
+  as.factor(first4s.data.first.fix$trialtype_agent)
 levels(first4s.data.first.fix$trialtype_agent)
-first4s.data.first.fix$trialtype_agent.c=as.vector(scale(as.numeric(first4s.data.first.fix$trialtype_agent==levels(as.factor(first4s.data.first.fix$trialtype_agent))[2]), center=TRUE, scale= FALSE))
-first4s.data.first.fix$agent_first.c=as.vector(scale(as.numeric(first4s.data.first.fix$agent_first==levels(as.factor(first4s.data.first.fix$agent_first))[2]), center=TRUE, scale= FALSE))
+
+first4s.data.first.fix$trialtype_agent.c = as.vector(scale(
+  as.numeric(
+    first4s.data.first.fix$trialtype_agent == levels(as.factor(first4s.data.first.fix$trialtype_agent))[2]
+  ),
+  center = TRUE,
+  scale = FALSE
+))
+
+first4s.data.first.fix$agent_first.c = as.vector(scale(
+  as.numeric(first4s.data.first.fix$agent_first == levels(
+    as.factor(first4s.data.first.fix$agent_first)
+  )[2]),
+  center = TRUE,
+  scale = FALSE
+))
 levels(as.factor(first4s.data.first.fix$z.session))
 hist(first4s.data.first.fix$first_fix_old_goal)
 ```
@@ -185,14 +205,13 @@ mm1_first_fix=glmer(first_fix_old_goal ~ trialtype_agent+z.session+agent_first +
              data=first4s.data.first.fix, family=binomial, 
             control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 
-#prune random slope structure due to convergence warning
+#prune random slope structure due to convergence warning (i.e, exclude correlation between random icpt and slopes, remove random slope of session number)
 mm1_first_fix2=glmer(first_fix_old_goal ~ trialtype_agent+z.session+agent_first +
             (1|subject)+(0+trialtype_agent.c |subject),
              data=first4s.data.first.fix, family=binomial, 
             control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 
 summary(mm1_first_fix2)
-drop1(mm1_first_fix2, test="Chisq")
 ```
 
 
@@ -214,6 +233,7 @@ vif(xx)
 ```{r}
 mm1_first_fix2.ci=boot.glmm.pred(model.res=mm1_first_fix2, excl.warnings=F,
 nboots=1000, para=T, n.cores="all-1", resol=1000, level=0.95)
+mm1_first_fix2.ci$ci.estimates
 
 ```
 
@@ -222,6 +242,7 @@ nboots=1000, para=T, n.cores="all-1", resol=1000, level=0.95)
 m.stab.mm1_first_fix2 <- glmm.model.stab(model.res = mm1_first_fix2)
 m.stab.mm1_first_fix2$detailed$warnings
 m.stab.mm1_first_fix2_output <- as.data.frame(round(m.stab.mm1_first_fix2$summary[, -1], 3))
+m.stab.mm1_first_fix2_output 
 png("graphs/mm1_first_fix2_stability_plot.png")
 m.stab.plot(round(m.stab.mm1_first_fix2$summary[, -1], 3))
 dev.off()
@@ -262,12 +283,7 @@ mm1_first_fix2_output_table <-
 write.csv(mm1_first_fix2_output_table, file = "saves/mm1_first_fix2_output_table.csv")
 ```
 
-
-
-
-
-
-## Plot showing the object looks in the first 4 s of the test trials (without dogs that did not look not at any of the objects in a given trial)
+## Plot showing the object looks in the first 4 s of the test trials (including dogs that did not look at any of the objects in a given trial)
 ```{r}
 first4s.data.first.fix.nolooked.included.agg<-first4s.data.first.fix %>%
   group_by(trialtype_agent, session_withinagent) %>%
@@ -299,6 +315,7 @@ mm1_first_fix_withoutNA2=glmer(first_fix_old_goal_withoutNA ~ trialtype_agent+z.
              data=first4s.data.first.fix, family=binomial, 
             control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 
+#why is there a null model here?
 mm1_first_fix_withoutNA2_null=glmer(first_fix_old_goal_withoutNA ~ z.session+agent_first +
             (1|subject)+(0+trialtype_agent.c + z.session|subject),#removed the correlation between random intercept and random slope
              data=first4s.data.first.fix, family=binomial, 
@@ -306,15 +323,77 @@ mm1_first_fix_withoutNA2_null=glmer(first_fix_old_goal_withoutNA ~ z.session+age
 
 anova(mm1_first_fix_withoutNA2, mm1_first_fix_withoutNA2_null, test ="Chisq")
 summary(mm1_first_fix_withoutNA2)
-drop1(mm1_first_fix_withoutNA2, test="Chisq")
+mm1_first_fix_withoutNA2_drop1<-drop1(mm1_first_fix_withoutNA2, test="Chisq")
 ```
+Check for collinearity - model without NAs
+```{r}
+library(car)
+xx=lm(first_fix_old_goal_withoutNA ~ trialtype_agent+z.session+agent_first, data=first4s.data.first.fix)
+vif(xx)
+```
+#### Confidence intervals of the estimates
+```{r}
+mm1_first_fix2_withoutNAs.ci=boot.glmm.pred(model.res=mm1_first_fix_withoutNA2, excl.warnings=F,
+nboots=1000, para=T, n.cores="all-1", resol=1000, level=0.95)
+mm1_first_fix2_withoutNAs.ci$ci.estimates
+
+```
+
+#### model stability
+```{r}
+m.stab.mm1_first_fix2_withoutNAs <- glmm.model.stab(model.res = mm1_first_fix_withoutNA2)
+m.stab.mm1_first_fix2_withoutNAs$detailed$warnings #models failed to converge
+m.stab.mm1_first_fix2_withoutNAs_output <- as.data.frame(round(m.stab.mm1_first_fix2$summary[, -1], 3))
+m.stab.mm1_first_fix2_withoutNAs_output 
+png("graphs/mm1_first_fix2_withoutNAs_stability_plot.png")
+m.stab.plot(round(m.stab.mm1_first_fix2_withoutNAs$summary[, -1], 3))
+#dev.off()
+# The estimates do not look reasonable
+```
+
+
+#### output table
+
+
+```{r}
+mm1_first_fix2_withoutNAs_output_table <-
+  bind_cols(as.data.frame(summary(mm1_first_fix_withoutNA2)$coeff),
+            mm1_first_fix_withoutNA2_drop1,
+            mm1_first_fix2_withoutNAs.ci$ci.estimates,
+            m.stab.mm1_first_fix2_withoutNAs_output[1:4,]) %>%
+  select(
+    Estimate,
+    SE = `Std. Error`,
+    LowerCI = X2.5.,
+    UpperCI = X97.5.,
+    Chi2 = LRT,
+    df = npar,
+    p = `Pr(Chi)`,
+    z_wald = `z value`,
+    p_wald = `Pr(>|z|)`,
+    min_stab = min,
+    max_stab = max
+  ) %>% #
+  mutate(across(.cols = c(p), ~ format(round(.x, 3), nsmall = 3))) %>%
+  mutate(across(.cols = c(Estimate:Chi2), ~ format(round(.x, 2), nsmall = 2))) %>%
+  mutate(across(.cols = c(z_wald:max_stab), ~ format(round(.x, 2), nsmall = 2))) %>%
+  #mutate(across(Chi2:p, ~replace_na(.x, "")))%>%
+  mutate(p = replace(p, p == 0, "<0.001"))
+
+write.csv(mm1_first_fix2_withoutNAs_output_table, file = "saves/mm1_first_fix2_withoutNAs_output_table.csv")
+```
+
 ## Plot showing the object looks in the first 4 s of the test trials (without dogs that did not look not at any of the objects in a given trial)
 ```{r}
 first4s.data.first.fix.agg<-first4s.data.first.fix %>%
   group_by(trialtype_agent, session_withinagent) %>%
-  summarise(first_fix_old_goal_mean = mean(first_fix_old_goal_withoutNA, na.rm=TRUE), 
-            first_fix_old_goal_sum = sum(first_fix_old_goal_withoutNA==1, na.rm=TRUE), 
+  summarise(first_fix_old_goal_mean = mean(first_fix_old_goal_withoutNA, na.rm=TRUE), #number of dogs that anticipated the old goal object
+            first_fix_old_goal_sum = sum(first_fix_old_goal_withoutNA==1, na.rm=TRUE), #number of dogs that looked at at least one of the objects
             first_fix_old_goal_count = sum(!is.na(first_fix_old_goal_withoutNA)))
+
+```
+
+```{r}
 
 ggplot(first4s.data.first.fix.agg, aes(x = trialtype_agent, y = first_fix_old_goal_mean)) +
   geom_bar(stat="identity") + 
