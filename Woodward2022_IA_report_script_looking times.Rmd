@@ -1,0 +1,388 @@
+---
+title: Woodward 2022: Dwell time analysis
+author: Christoph Voelter
+date: 
+output: html_document
+---
+notes: 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+#remove(list=c("first4s.data_short"))
+library(tidyverse)
+library(summarytools)
+library(lme4)
+
+source("./functions/diagnostic_fcns.r")
+source("./functions/glmm_stability.r")
+source("./functions/boot_glmm.r")
+source("./functions/boot_glmm2.r")
+#load("workspaces/AL_test_first4s.RData")
+```
+
+## Original IAs
+### End IP
+```{r}
+demo.data <- read_csv("data/Woodward_2022_counterbalancing.csv") %>%
+  mutate(
+    EDF1 = fct_recode(
+      as.factor(EDF1),
+      "Georgia_1" = "Georgia1",
+    )
+  ) %>%
+  separate(EDF1, c("subject", "num"), sep = "_")
+```
+
+```{r}
+after_agent_dir_cue.data <-
+  read_delim(
+    "data/Woodward2022_IA_Report_for_combined-agent-object_analysis_IP_after_agent_directional_cue.txt",
+    na = ".",
+    delim = "\t"
+  ) %>%
+  dplyr::select(
+    Session_Name_,
+    IP_LABEL,
+    IA_LABEL,
+    IA_ID,
+    Trial_Index_,
+    condition,
+    dog_session,
+    sub_id,
+    trial_number,
+    trial_type,
+    session_number,
+    video_file,
+    DATA_FILE,
+    IA_AREA,
+    IA_AVERAGE_FIX_PUPIL_SIZE,
+    IA_DWELL_TIME,
+    "IA_DWELL_TIME_%",
+    IA_FIXATION_COUNT,
+    "IA_FIXATION_%",
+    IA_FIRST_FIXATION_INDEX, #Ordinal sequence of the first fixation that       #was within the current interest area.
+    IA_FIRST_FIXATION_VISITED_IA_COUNT, #number of different interest areas
+    #visited so far before the first fixation is made to the
+    #current interest area.
+    IA_MAX_FIX_PUPIL_SIZE,
+    IA_FIRST_FIXATION_TIME,
+    INTEREST_AREA_FIXATION_SEQUENCE,
+    TRIAL_DWELL_TIME,
+    TRIAL_FIXATION_COUNT,
+    TRIAL_IA_COUNT,
+    TRIAL_TOTAL_VISITED_IA_COUNT
+  ) %>%
+  filter(DATA_FILE != "Melody_1.edf", DATA_FILE != "Mia_5.edf") %>%
+  filter(DATA_FILE != "Timo_5.edf", DATA_FILE != "Joker_5.edf") %>% # backup recordings in case the first sessions are below 70% onscreen looking
+  #filter(!(DATA_FILE == "Amy_4.edf" & Trial_Index_ != 1)) %>%
+  #mutate(session.num = as.numeric(session.num)) %>%
+  #mutate(session.num.corrected = ifelse(DATA_FILE == "Amy_4.edf" | DATA_FILE == "Amy_5.edf" | DATA_FILE == "George_5.edf" | DATA_FILE == "Melody_2.edf" | DATA_FILE == #"Melody_3.edf" | DATA_FILE == "Melody_4.edf", session.num-1,
+#                                        ifelse(DATA_FILE == "Melody_7.edf" | DATA_FILE == "Mia_6.edf", session.num-3, session.num))) %>% #recoding of session number to account for dogs with aborted sessions
+  mutate(
+    Session_Name_ = fct_recode(
+      Session_Name_,
+      Georgia_1 = "Georgia1",
+      Georgia_2 = "Georgia2",
+      Georgia_3 = "Georgia3",
+      Georgia_4 = "Georgia4"
+    )
+  ) %>%
+  separate(Session_Name_, c("subject", "session.num"), sep = "_") %>%
+  mutate(condition_trial = paste(condition, "_", Trial_Index_)) %>%
+  filter(condition != "fam")%>% #remove familiarisation 
+  full_join(demo.data) %>%
+  mutate(IA_LABEL2 = IA_LABEL, trial_type2 = trial_type) %>%
+  separate(
+    IA_LABEL2,
+    into = c("ia_object", "ia_side", "ia_label_del", "ia_label_del2"),
+    sep = "_"
+  ) %>%
+  separate(
+    trial_type2,
+    into = c("trialtype_agent", "trialtype_object", "trialtype_side"),
+    sep = "_"
+  ) %>%
+  #filter(ia_object == "elephant" | ia_object == "ball") %>%
+  mutate(
+    IA_fam_object = ifelse(
+      condition == "new_goal" &
+        ia_object == trialtype_object,
+      "new_goal_old_side",
+      ifelse(
+        condition == "new_goal" &
+          ia_object != trialtype_object,
+        "old_goal_new_side",
+        ifelse(
+          condition == "new_side" &
+            ia_object != trialtype_object,
+          "new_goal_old_side",
+          ifelse(
+            condition == "new_side" &
+              ia_object == trialtype_object,
+            "old_goal_new_side",
+            ""
+          )
+        )
+      )
+    )
+  ) %>%
+  filter(is.na(ia_label_del2)) %>% #remove the smaller IAs from familiarisation
+  mutate(ia_object = ifelse(trialtype_agent =="inanimate" & ia_object == "human", "inanimate", ia_object))%>%
+  separate(
+    agent_target_side_first,
+    into = c("agent_first", "object_first", "side_first"), #shown to the dog in the first session
+    sep = "_"
+  ) 
+  
+after_agent_dir_cue.data %>% select(subject, condition_trial, trial_type, IA_LABEL, IA_fam_object) 
+#IA_fam_object=what the AOI looked at contains
+after_agent_dir_cue.data %>% select(subject, condition, trial_type, IA_LABEL, IA_fam_object,IA_FIRST_FIXATION_INDEX,IA_FIRST_FIXATION_VISITED_IA_COUNT) 
+
+
+levels(as.factor(after_agent_dir_cue.data$DATA_FILE))
+levels(as.factor(after_agent_dir_cue.data$condition))
+table(as.factor(after_agent_dir_cue.data$DATA_FILE),
+      after_agent_dir_cue.data$Trial_Index_)
+table(as.factor(after_agent_dir_cue.data$DATA_FILE),
+      after_agent_dir_cue.data$Trial_Index_)
+table(as.factor(after_agent_dir_cue.data$DATA_FILE),
+      after_agent_dir_cue.data$session.num)
+table(as.factor(after_agent_dir_cue.data$DATA_FILE),
+      after_agent_dir_cue.data$session_number)
+```
+
+```{r}
+
+after_agent_dir_cue_wider.data <- after_agent_dir_cue.data %>%
+  filter(ia_object == "human" | ia_object == "inanimate" | ia_object == trialtype_object) %>% #only keep agent IA and active
+  select(subject, session_number, ia_object, TRIAL_DWELL_TIME, condition, agent_first, ,trial_type, trialtype_agent, trialtype_object, trialtype_side,  IA_DWELL_TIME)%>%
+  group_by(subject, session_number, condition, agent_first, TRIAL_DWELL_TIME, trial_type, trialtype_agent, trialtype_object, trialtype_side) %>%
+  summarise(sum_dwell_time = sum(IA_DWELL_TIME))%>%
+  ungroup()%>%
+  mutate(prop_dwell_time = sum_dwell_time / TRIAL_DWELL_TIME)
+```
+## Linear mixed model
+
+```{r}
+
+after_agent_dir_cue_wider.data$z.session<-as.vector(scale(after_agent_dir_cue_wider.data$session_number, center = TRUE, scale=TRUE))
+
+after_agent_dir_cue_wider.data$condition <-
+  as.factor(after_agent_dir_cue_wider.data$condition)
+levels(after_agent_dir_cue_wider.data$condition)
+after_agent_dir_cue_wider.data$condition.c = as.vector(scale(
+  as.numeric(
+    after_agent_dir_cue_wider.data$condition == levels(as.factor(
+      after_agent_dir_cue_wider.data$condition
+    ))[2]
+  ),
+  center = TRUE,
+  scale = FALSE
+))
+
+
+after_agent_dir_cue_wider.data$trialtype_agent <-
+  as.factor(after_agent_dir_cue_wider.data$trialtype_agent)
+levels(after_agent_dir_cue_wider.data$trialtype_agent)
+
+after_agent_dir_cue_wider.data$trialtype_agent.c = as.vector(scale(
+  as.numeric(
+    after_agent_dir_cue_wider.data$trialtype_agent == levels(as.factor(after_agent_dir_cue_wider.data$trialtype_agent))[2]
+  ),
+  center = TRUE,
+  scale = FALSE
+))
+
+after_agent_dir_cue_wider.data$agent_first.c = as.vector(scale(
+  as.numeric(after_agent_dir_cue_wider.data$agent_first == levels(
+    as.factor(after_agent_dir_cue_wider.data$agent_first)
+  )[2]),
+  center = TRUE,
+  scale = FALSE
+))
+levels(as.factor(after_agent_dir_cue_wider.data$z.session))
+hist(after_agent_dir_cue_wider.data$sum_dwell_time)
+```
+
+
+
+
+fit model
+```{r}
+
+mm1.dwell.time<-lme4::lmer(sum_dwell_time~ condition * trialtype_agent +
+                            z.session +  agent_first +
+            (1+condition.c+trialtype_agent.c + z.session|subject), data=after_agent_dir_cue_wider.data, REML=FALSE)
+#does not converge
+mm1.dwell.time_red<-lme4::lmer(sum_dwell_time~ condition * trialtype_agent +
+                            z.session +  agent_first +
+            (1|subject)+ (0+condition.c+trialtype_agent.c + z.session|subject), data=after_agent_dir_cue_wider.data, REML=FALSE)
+
+
+drop1(mm1.dwell.time_red, test="Chisq")
+# summary(mm1.yarbus.signaling)
+```
+
+
+```{r}
+diagnostics.plot(mm1.dwell.time_red, size.fac=2)
+
+ranef.diagn.plot(mm1.dwell.time_red)
+```
+
+```{r}
+# drop1_mm1.yarbus.signaling <- drop1(mm1.yarbus.signaling, test="Chisq")%>%
+#   filter(!is.na(npar))%>%
+#   add_row(npar = rep(NA,1),  .before = 1)%>%
+#   add_row(npar  = rep(NA,3),  .before = 3)
+# drop1_mm1.yarbus.signaling
+
+```
+Individual fixed effects
+```{r}
+library(lmerTest)
+
+mm1.dwell.time_red.reml<-lmerTest::lmer(sum_dwell_time~ condition * trialtype_agent +
+                            z.session +  agent_first +
+            (1|subject)+ (0+condition.c+trialtype_agent.c + z.session|subject), data=after_agent_dir_cue_wider.data, REML=TRUE)
+
+summary(mm1.dwell.time_red.reml)
+```
+ ### reduced model without interaction term
+```{r}
+
+mm1.dwell.time_red2.reml<-lmerTest::lmer(sum_dwell_time~ condition + trialtype_agent +
+                            z.session +  agent_first +
+            (1|subject)+ (0+condition.c+trialtype_agent.c + z.session|subject), data=after_agent_dir_cue_wider.data, REML=TRUE)
+
+summary(mm1.dwell.time_red2.reml)
+
+```
+# until here 
+ 
+Colinearity checks
+```{r}
+library(car)
+xx=lm(baitedX_corrected~condition + z.trial+z.session + sex + z.age, data=yarbus.data.signaling)
+vif(xx)
+```
+relative model complexity
+```{r}
+length(residuals(mm1.dwell.time_red2.reml))/
+(length(fixef(mm1.dwell.time_red2.reml))+
+nrow(as.data.frame(summary(mm1.dwell.time_red2.reml)$varcor)))
+```
+model stability
+```{r}
+
+mm1.yarbus.signaling.stab=glmm.model.stab(model.res=mm1.yarbus.signaling, contr=NULL, para=F, data=NULL)
+
+mm1.yarbus.signaling.stab$summary
+
+m.stab.plot(round(mm1.yarbus.signaling.stab$summary[, -1], 3))
+```
+--> model stable with regard to the fixed effects
+
+```{r}
+boot.mm1.yarbus.signaling=boot.lmer(mm1.yarbus.signaling, discard.warnings=F,
+nboots=1000, para=T, n.cores="all-1", resol=1000, level=0.95)
+
+mm1.yarbus.signaling_boot_ci<-boot.mm1.yarbus.signaling$ci.estimates
+```
+#### effect size
+```{r}
+library(MuMIn)
+r.squaredGLMM(mm1.yarbus.signaling)
+```
+
+
+#### output table
+```{r}
+
+
+model_table_mm1.yarbus.signaling <- bind_cols(as.data.frame(summary(mm1.yarbus.signaling)$coefficients),
+                         drop1_mm1.yarbus.signaling,
+                         mm1.yarbus.signaling_boot_ci) %>% #mm2_boot_ci<-boot.full$ci.estimates
+  dplyr::select(Estimate, SE = `Std. Error`, LowerCI = X2.5., UpperCI = X97.5., Chi2 = LRT, df = npar, p = `Pr(Chi)`) %>%
+  mutate(across(.cols = c(p), ~ round(.x, 3))) %>% 
+  mutate(across(.cols = c(Estimate:Chi2), ~ round(.x, 2))) %>% 
+  #mutate(across(Chi2:p, ~replace_na(.x, "")))%>%
+mutate(p=replace(p, p==0, "<0.001"))
+
+write.csv(model_table_mm1.yarbus.signaling , file = "saves/yarbus_signalling_mm1_output_table.csv")
+```
+
+
+
+
+#######beta model, old code########
+
+
+## fit model
+```{r}
+mm1_signalling.face=glmmTMB(prop_fixation_time.scaled ~ 
+                             condition+z.trial+z.session+z.age+sex +
+                             (1|subject)+
+                             (0+condition.c1|subject)+(0+condition.c2|subject)+ (0+condition.c3|subject)+(0+condition.c4|subject)+
+                             (0+z.session|subject),# + (0+z.trial|subject), pruned to convergence issues
+                           data=signalling.face.data, family=beta_family, control=contr)
+
+summary(mm1_signalling.face)
+```
+
+
+```{r}
+mm1_signalling.face_null=glmmTMB(prop_fixation_time.scaled ~ 
+                             z.trial+z.session+z.age+sex +
+            (1|subject)+
+            (0+condition.c1|subject)+(0+condition.c2|subject)+ (0+condition.c3|subject)+(0+condition.c4|subject)+
+            (0+z.session|subject),# + (0+z.trial|subject),
+             data=signalling.face.data, family=beta_family, control=contr)
+
+anova(mm1_signalling.face, mm1_signalling.face_null, test="Chisq")
+
+```
+
+LRT
+```{r}
+mm1_signalling.face_drop1 <- drop1(mm1_signalling.face, test="Chisq")
+mm1_signalling.face_drop1
+mm1_signalling.face_drop1<- mm1_signalling.face_drop1%>% 
+  filter(!is.na(Df)) %>% 
+  add_row(Df = rep(NA,1),  .before = 1) %>% 
+  add_row(Df = rep(NA,3),  .before = 3)
+```
+
++ check for overdispersion
+```{r}
+overdisp.test(mm1_signalling.face)
+```
+
+
++ Collinearity checks
+```{r}
+library(car)
+xx=lm(prop_fixation_time.scaled ~                              condition+z.trial+z.session+z.age+sex, data=signalling.face.data)
+vif(xx)
+```
+
+```{r eval=FALSE}
+mm1_signalling.face.ci=boot.glmmtmb(mm1_signalling.face, 
+nboots=1000, para=T, n.cores="all-1", resol=1000, level=0.95, data=signalling.face.data)
+```
+
+#### output table
+
+```{r}
+mm1_signalling.face_table <- bind_cols(as.data.frame(summary(mm1_signalling.face)$coefficients$cond),
+                                      mm1_signalling.face_drop1)%>%#,
+                                    # mm1_area_tail.ci$ci.estimates$fe[1:7,]) %>%
+  dplyr::select(Estimate, SE = `Std. Error`, Chi2 = LRT, df = Df, p = `Pr(>Chi)`, z_wald=`z value`, p_wald=`Pr(>|z|)`) %>% #LowerCI = X2.5., UpperCI = X97.5., 
+  mutate(across(.cols = c(p), ~ format(round(.x, 3), nsmall=3))) %>% 
+  mutate(across(.cols = c(Estimate:Chi2), ~ format(round(.x, 2), nsmall=2))) %>% 
+  #mutate(across(Chi2:p, ~replace_na(.x, "")))%>%
+  mutate(p=replace(p, p==0, "<0.001"))
+
+write.csv(mm1_signalling.face_table, file = "saves/mm1_signalling.face_table.csv")
+```
+

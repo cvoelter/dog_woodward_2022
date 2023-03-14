@@ -7,7 +7,7 @@ output: html_document
 notes: 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-#rm(list=ls())
+rm(list=ls())
 #remove(list=c("first4s.data_short"))
 library(tidyverse)
 library(summarytools)
@@ -17,7 +17,7 @@ source("./functions/diagnostic_fcns.r")
 source("./functions/glmm_stability.r")
 source("./functions/boot_glmm.r")
 source("./functions/boot_glmm2.r")
-
+#load("workspaces/AL_test_first4s.RData")
 ```
 
 ## Original IAs
@@ -34,9 +34,9 @@ demo.data <- read_csv("data/Woodward_2022_counterbalancing.csv") %>%
 ```
 
 ```{r}
-first4s.data <-
+full.trial.data <-
   read_delim(
-    "data/Woodward2022_IA_Report_IP_test_first_4_sec.txt",
+    "data/Woodward2022_IA_Report_video_area_IP_full_trial_no_fix_trigger.txt",
     na = ".",
     delim = "\t"
   ) %>%
@@ -47,6 +47,7 @@ first4s.data <-
     IA_ID,
     Trial_Index_,
     condition,
+    video_duration = "__duration__1",
     dog_session,
     sub_id,
     trial_number,
@@ -89,60 +90,24 @@ first4s.data <-
   ) %>%
   separate(Session_Name_, c("subject", "session.num"), sep = "_") %>%
   mutate(condition_trial = paste(condition, "_", Trial_Index_)) %>%
-  full_join(demo.data) %>%
-  mutate(IA_LABEL2 = IA_LABEL, trial_type2 = trial_type) %>%
-  separate(
-    IA_LABEL2,
-    into = c("ia_object", "ia_side", "ia_label_del", "ia_label_del2"),
-    sep = "_"
-  ) %>%
-  separate(
-    trial_type2,
-    into = c("trialtype_agent", "trialtype_object", "trialtype_side"),
-    sep = "_"
-  ) %>%
-  filter(ia_object == "elephant" | ia_object == "ball") %>%
-  mutate(
-    IA_fam_object = ifelse(
-      condition == "new_goal" &
-        ia_object == trialtype_object,
-      "new_goal_old_side",
-      ifelse(
-        condition == "new_goal" &
-          ia_object != trialtype_object,
-        "old_goal_new_side",
-        ifelse(
-          condition == "new_side" &
-            ia_object != trialtype_object,
-          "new_goal_old_side",
-          ifelse(
-            condition == "new_side" &
-              ia_object == trialtype_object,
-            "old_goal_new_side",
-            ""
-          )
-        )
-      )
-    )
-  ) 
+  full_join(demo.data)%>%
+  mutate(proportion_video_area_lt = IA_DWELL_TIME / video_duration, proportion_trial_lt = TRIAL_DWELL_TIME / video_duration)
 
-first4s.data %>% select(subject, condition_trial, trial_type, IA_LABEL, IA_fam_object) 
-#IA_fam_object=what the AOI looked at contains
-first4s.data %>% select(subject, condition, trial_type, IA_LABEL, IA_fam_object,IA_FIRST_FIXATION_INDEX,IA_FIRST_FIXATION_VISITED_IA_COUNT) 
+full.trial.data %>% filter (proportion_trial_lt < 0.7)
 
-
-levels(as.factor(first4s.data$DATA_FILE))
-levels(as.factor(first4s.data$condition))
-table(as.factor(first4s.data$DATA_FILE),
-      first4s.data$Trial_Index_)
-table(as.factor(first4s.data$DATA_FILE),
-      first4s.data$Trial_Index_)
-table(as.factor(first4s.data$DATA_FILE),
-      first4s.data$session.num)
-table(as.factor(first4s.data$DATA_FILE),
-      first4s.data$session_number)
 ```
 
+
+two dogs have trial dwell time values < 0.7 (Juna, Session 2, Maylo Session 3; in both cases in the test trials) but they did not seem to leave the chin rest.
+Next steps: check these values using the sample report. 
+
+
+
+
+
+
+
+###############################################################################
 ```{r}
 
 first4s.data.first.fix <- first4s.data %>%
@@ -314,17 +279,31 @@ mm1_first_fix_withoutNA2=glmer(first_fix_old_goal_withoutNA ~ trialtype_agent+z.
             (1|subject)+(0+trialtype_agent.c + z.session|subject),#removed the correlation between random intercept and random slope
              data=first4s.data.first.fix, family=binomial, 
             control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
-
-#why is there a null model here?
-mm1_first_fix_withoutNA2_null=glmer(first_fix_old_goal_withoutNA ~ z.session+agent_first +
-            (1|subject)+(0+trialtype_agent.c + z.session|subject),#removed the correlation between random intercept and random slope
-             data=first4s.data.first.fix, family=binomial, 
-            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
-
-anova(mm1_first_fix_withoutNA2, mm1_first_fix_withoutNA2_null, test ="Chisq")
+#model has unusually large predictor estimates and variance of the random slopes
 summary(mm1_first_fix_withoutNA2)
 mm1_first_fix_withoutNA2_drop1<-drop1(mm1_first_fix_withoutNA2, test="Chisq")
 ```
+
+pruned model (random slope of z.session removed)
+```{r}
+mm1_first_fix_withoutNA2_pruned=glmer(first_fix_old_goal_withoutNA ~ trialtype_agent+z.session+agent_first +
+            (1|subject)+(0+trialtype_agent.c|subject),#removed the correlation between random intercept and random slope and the random slope of session
+             data=first4s.data.first.fix, family=binomial, 
+            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+# estimates and random slope variance look better (values are smaller)
+#null model because drop 1 does not converge
+mm1_first_fix_withoutNA2_pruned_null=glmer(first_fix_old_goal_withoutNA ~ z.session+agent_first +
+            (1|subject)+(0+trialtype_agent.c|subject),#removed the correlation between random intercept and random slope
+             data=first4s.data.first.fix, family=binomial, 
+            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+anova(mm1_first_fix_withoutNA2_pruned, mm1_first_fix_withoutNA2_pruned_null, test = "Chisq")
+#--> agent not significant 
+summary(mm1_first_fix_withoutNA2_pruned)
+drop1(mm1_first_fix_withoutNA2_pruned, test = "Chisq") #does not converge
+```
+
+
+
 Check for collinearity - model without NAs
 ```{r}
 library(car)
@@ -343,7 +322,7 @@ mm1_first_fix2_withoutNAs.ci$ci.estimates
 ```{r}
 m.stab.mm1_first_fix2_withoutNAs <- glmm.model.stab(model.res = mm1_first_fix_withoutNA2)
 m.stab.mm1_first_fix2_withoutNAs$detailed$warnings #models failed to converge
-m.stab.mm1_first_fix2_withoutNAs_output <- as.data.frame(round(m.stab.mm1_first_fix2$summary[, -1], 3))
+m.stab.mm1_first_fix2_withoutNAs_output <- as.data.frame(round(m.stab.mm1_first_fix2_withoutNAs$summary[, -1], 3))
 m.stab.mm1_first_fix2_withoutNAs_output 
 png("graphs/mm1_first_fix2_withoutNAs_stability_plot.png")
 m.stab.plot(round(m.stab.mm1_first_fix2_withoutNAs$summary[, -1], 3))
@@ -386,47 +365,45 @@ write.csv(mm1_first_fix2_withoutNAs_output_table, file = "saves/mm1_first_fix2_w
 ## Plot showing the object looks in the first 4 s of the test trials (without dogs that did not look not at any of the objects in a given trial)
 ```{r}
 first4s.data.first.fix.agg<-first4s.data.first.fix %>%
-  group_by(trialtype_agent, session_withinagent) %>%
+  group_by(trialtype_agent, agent_first, session_withinagent) %>%
   summarise(first_fix_old_goal_mean = mean(first_fix_old_goal_withoutNA, na.rm=TRUE), #number of dogs that anticipated the old goal object
             first_fix_old_goal_sum = sum(first_fix_old_goal_withoutNA==1, na.rm=TRUE), #number of dogs that looked at at least one of the objects
             first_fix_old_goal_count = sum(!is.na(first_fix_old_goal_withoutNA)))
+```
 
+
+```{r}
+first4s.data.first.fix.agg2<-first4s.data.first.fix %>%
+  group_by(trialtype_agent) %>%
+  summarise(first_fix_old_goal_mean = mean(first_fix_old_goal_withoutNA, na.rm=TRUE), 
+            first_fix_old_goal_sum = sum(first_fix_old_goal_withoutNA==1, na.rm=TRUE), #number of dogs that anticipated the old goal object
+            first_fix_old_side_sum = sum(first_fix_old_goal_withoutNA==0, na.rm=TRUE), #number of dogs that anticipated the old goal object
+            first_fix_old_goal_count = sum(!is.na(first_fix_old_goal_withoutNA)))#number of dogs that looked at at least one of the objects
+
+#binomial test for
+#human agent
+binom.test(x = first4s.data.first.fix.agg2$first_fix_old_goal_sum[1] , first4s.data.first.fix.agg2$first_fix_old_goal_count[1] )
+#and for inanimate agent
+binom.test(x = first4s.data.first.fix.agg2$first_fix_old_goal_sum[2] , first4s.data.first.fix.agg2$first_fix_old_goal_count[2] )
 ```
 
 ```{r}
 
 ggplot(first4s.data.first.fix.agg, aes(x = trialtype_agent, y = first_fix_old_goal_mean)) +
   geom_bar(stat="identity") + 
-  facet_wrap(~session_withinagent)+
+  facet_grid(agent_first~session_withinagent)+
   ylim(0,1)
 ```
 
-## intercept only model (with agent first centered - to test whether the dogs have a preference for the new goal in the human condition)
+## intercept only model ( to test whether the dogs have a preference for the new goal in the human condition)
 
 ```{r}
-mm1_first_fix_intercept_only=glmer(first_fix_old_goal_withoutNA ~ trialtype_agent+z.session+agent_first.c +
-            (1|subject)+(0+trialtype_agent.c + z.session|subject),#removed the correlation between random intercept and random slope
+mm1_first_fix_intercept_only=glmer(first_fix_old_goal_withoutNA ~ +z.session+agent_first.c +
+            (1|subject),
              data=first4s.data.first.fix, family=binomial, 
             control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 summary(mm1_first_fix_intercept_only)
 ```
-
-## intercept only model (with agent first centered and with relevelled agent reference category- to test whether the dogs have a preference for the new goal in the inanimate condition)
-
-```{r}
-
-first4s.data.first.fix$trialtype_agent.rel <- relevel(first4s.data.first.fix$trialtype_agent, ref = "inanimate") 
-levels(first4s.data.first.fix$trialtype_agent.rel)
-mm1_first_fix_intercept_only_agent_relevelled=glmer(first_fix_old_goal_withoutNA ~ trialtype_agent.rel+z.session+agent_first.c +
-            (1|subject)+(0+trialtype_agent.c + z.session|subject),#removed the correlation between random intercept and random slope
-             data=first4s.data.first.fix, family=binomial, 
-            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
-summary(mm1_first_fix_intercept_only_agent_relevelled)
-```
-
-
-
-
 
 
 
