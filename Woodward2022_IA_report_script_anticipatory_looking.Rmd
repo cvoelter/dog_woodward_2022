@@ -223,7 +223,7 @@ mm1_first_fix2_drop1 <- drop1(mm1_first_fix2, test="Chisq")%>%
 ```
 
 
-Check for colinearity
+Check for collinearity
 ```{r}
 library(car)
 xx=lm(first_fix_old_goal ~ trialtype_agent+z.session+agent_first, data=first4s.data.first.fix)
@@ -288,14 +288,30 @@ write.csv(mm1_first_fix2_output_table, file = "saves/mm1_first_fix2_output_table
 first4s.data.first.fix.nolooked.included.agg<-first4s.data.first.fix %>%
   group_by(trialtype_agent, session_withinagent) %>%
   summarise(first_fix_old_goal_mean = mean(first_fix_old_goal, na.rm=TRUE), 
+            #number of dogs that anticipated the old goal object:
             first_fix_old_goal_sum = sum(first_fix_old_goal==1, na.rm=TRUE), 
+            #number of dogs that looked at at least one of the objects:
             first_fix_old_goal_count = sum(!is.na(first_fix_old_goal)))
 
-ggplot(first4s.data.first.fix.nolooked.included.agg, aes(x = trialtype_agent, y = first_fix_old_goal_mean)) +
+al_plot_NAs_included<-ggplot(first4s.data.first.fix.nolooked.included.agg, aes(x = trialtype_agent, y = first_fix_old_goal_mean)) +
   geom_bar(stat="identity") + 
   facet_wrap(~session_withinagent)+
-  ylim(0,1)
+  ylim(0,1)+
+  ylab("Prop. dogs fixating the old goal first")+
+  xlab("Agent")+
+  theme(axis.text = element_text(size = 14))+  #axis text size 
+  theme(axis.title = element_text(size = 16))
 ```
+
+```{r}
+ggsave(filename="graphs/AL_NAs_included.png",
+  plot = al_plot_NAs_included,
+  width=8.5,
+  height=5,
+  #scale=0.55,
+  dpi=1200)
+```
+
 
 
 ## first fixation (binary model and no fixations are treated as NA)
@@ -401,8 +417,10 @@ write.csv(mm1_first_fix2_withoutNAs_output_table, file = "saves/mm1_first_fix2_w
 ```{r}
 first4s.data.first.fix.agg<-first4s.data.first.fix %>%
   group_by(trialtype_agent, agent_first, session_withinagent) %>%
-  summarise(first_fix_old_goal_mean = mean(first_fix_old_goal_withoutNA, na.rm=TRUE), #number of dogs that anticipated the old goal object
-            first_fix_old_goal_sum = sum(first_fix_old_goal_withoutNA==1, na.rm=TRUE), #number of dogs that looked at at least one of the objects
+  summarise(first_fix_old_goal_mean = mean(first_fix_old_goal_withoutNA, na.rm=TRUE), 
+            #number of dogs that anticipated the old goal object:
+            first_fix_old_goal_sum = sum(first_fix_old_goal_withoutNA==1, na.rm=TRUE),   
+            # number of dogs that looked at at least one of the objects:
             first_fix_old_goal_count = sum(!is.na(first_fix_old_goal_withoutNA)))
 ```
 
@@ -412,7 +430,7 @@ first4s.data.first.fix.agg2<-first4s.data.first.fix %>%
   group_by(trialtype_agent) %>%
   summarise(first_fix_old_goal_mean = mean(first_fix_old_goal_withoutNA, na.rm=TRUE), 
             first_fix_old_goal_sum = sum(first_fix_old_goal_withoutNA==1, na.rm=TRUE), #number of dogs that anticipated the old goal object
-            first_fix_old_side_sum = sum(first_fix_old_goal_withoutNA==0, na.rm=TRUE), #number of dogs that anticipated the old goal object
+            first_fix_old_side_sum = sum(first_fix_old_goal_withoutNA==0, na.rm=TRUE), #number of dogs that anticipated the old side object
             first_fix_old_goal_count = sum(!is.na(first_fix_old_goal_withoutNA)))#number of dogs that looked at at least one of the objects
 
 #binomial test for
@@ -424,11 +442,25 @@ binom.test(x = first4s.data.first.fix.agg2$first_fix_old_goal_sum[2] , first4s.d
 
 ```{r}
 
-ggplot(first4s.data.first.fix.agg, aes(x = trialtype_agent, y = first_fix_old_goal_mean)) +
+AL_plot_NAs_excluded<-ggplot(first4s.data.first.fix.agg, aes(x = trialtype_agent, y = first_fix_old_goal_mean)) +
   geom_bar(stat="identity") + 
   facet_grid(agent_first~session_withinagent)+
-  ylim(0,1)
+  ylim(0,1)+
+  ylab("Prop. dogs fixating the old goal first")+
+  xlab("Agent")+
+  theme(axis.text = element_text(size = 14))+  #axis text size 
+  theme(axis.title = element_text(size = 16))
 ```
+
+```{r}
+ggsave(filename="graphs/AL_plot_NAs_excluded.png",
+       plot=AL_plot_NAs_excluded,
+       width=8.5,
+       height=5,
+       #scale=0.55,
+       dpi=1200)
+```
+
 
 ## intercept only model ( to test whether the dogs have a preference for the new goal in the human condition)
 
