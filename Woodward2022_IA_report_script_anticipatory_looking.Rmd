@@ -70,7 +70,9 @@ first4s.data <-
     TRIAL_DWELL_TIME,
     TRIAL_FIXATION_COUNT,
     TRIAL_IA_COUNT,
-    TRIAL_TOTAL_VISITED_IA_COUNT
+    TRIAL_TOTAL_VISITED_IA_COUNT,
+    IP_START_TIME,
+    TRIAL_START_TIME
   ) %>%
   filter(DATA_FILE != "Melody_1.edf", DATA_FILE != "Mia_5.edf") %>%
   filter(DATA_FILE != "Timo_5.edf", DATA_FILE != "Joker_5.edf") %>% # backup recordings in case the first sessions are below 70% onscreen looking
@@ -124,7 +126,8 @@ first4s.data <-
         )
       )
     )
-  ) 
+  ) %>%
+  mutate(attention_getter_duration = IP_START_TIME - TRIAL_START_TIME)
 
 first4s.data %>% select(subject, condition_trial, trial_type, IA_LABEL, IA_fam_object) 
 #IA_fam_object=what the AOI looked at contains
@@ -153,7 +156,10 @@ first4s.data.first.fix <- first4s.data %>%
   mutate(old_goal_new_side = replace_na(old_goal_new_side, 99999999), new_goal_old_side = replace_na(new_goal_old_side, 99999999))%>%
   mutate(first_fix_old_goal=as.numeric(ifelse(old_goal_new_side<new_goal_old_side, 1, 0)),
          first_fix_old_goal_withoutNA = as.numeric(ifelse(old_goal_new_side==new_goal_old_side, NA,
-                                                          ifelse(old_goal_new_side<new_goal_old_side, 1, 0)))) %>%
+                                                          ifelse(old_goal_new_side<new_goal_old_side, 1, 0))),
+         first_fix_old_side=as.numeric(ifelse(old_goal_new_side>new_goal_old_side, 1, 0)),
+         first_fix_old_side_withoutNA = as.numeric(ifelse(old_goal_new_side==new_goal_old_side, NA,
+                                                          ifelse(old_goal_new_side>new_goal_old_side, 1, 0)))) %>%
     separate(
     agent_target_side_first,
     into = c("agent_first", "object_first", "side_first"), #shown to the dog in the first session
@@ -167,10 +173,19 @@ first4s.data.first.fix <- first4s.data %>%
 
 ## first fixation (binary model and no fixations are counted as 0)
 ```{r}
+table(first4s.data.first.fix$subject, first4s.data.first.fix$session_number)
+table(first4s.data.first.fix$subject, first4s.data.first.fix$session_withinagent)
 
 first4s.data.first.fix$z.session <-
   as.vector(scale(
     as.numeric(first4s.data.first.fix$session_number),
+    center = TRUE,
+    scale = TRUE
+  ))
+
+first4s.data.first.fix$z.session_within <-
+  as.vector(scale(
+    as.numeric(first4s.data.first.fix$session_withinagent),
     center = TRUE,
     scale = TRUE
   ))
@@ -200,14 +215,14 @@ hist(first4s.data.first.fix$first_fix_old_goal)
 
 fit model
 ```{r}
-mm1_first_fix=glmer(first_fix_old_goal ~ trialtype_agent+z.session+agent_first +
-            (1+trialtype_agent.c + z.session|subject),
+mm1_first_fix=glmer(first_fix_old_goal ~ trialtype_agent+z.session_within+agent_first +
+            (1+trialtype_agent.c + z.session_within|subject),
              data=first4s.data.first.fix, family=binomial, 
             control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 
 #prune random slope structure due to convergence warning (i.e, exclude correlation between random icpt and slopes, remove random slope of session number)
-mm1_first_fix2=glmer(first_fix_old_goal ~ trialtype_agent+z.session+agent_first +
-            (1|subject)+(0+trialtype_agent.c |subject),
+mm1_first_fix2=glmer(first_fix_old_goal ~ trialtype_agent+z.session_within+agent_first +
+            (1|subject)+(0+trialtype_agent.c|subject),
              data=first4s.data.first.fix, family=binomial, 
             control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 
@@ -226,7 +241,7 @@ mm1_first_fix2_drop1 <- drop1(mm1_first_fix2, test="Chisq")%>%
 Check for collinearity
 ```{r}
 library(car)
-xx=lm(first_fix_old_goal ~ trialtype_agent+z.session+agent_first, data=first4s.data.first.fix)
+xx=lm(first_fix_old_goal ~ trialtype_agent+z.session_within+agent_first, data=first4s.data.first.fix)
 vif(xx)
 ```
 #### Confidence intervals of the estimates
@@ -288,10 +303,19 @@ write.csv(mm1_first_fix2_output_table, file = "saves/mm1_first_fix2_output_table
 first4s.data.first.fix.nolooked.included.agg<-first4s.data.first.fix %>%
   group_by(trialtype_agent, session_withinagent) %>%
   summarise(first_fix_old_goal_mean = mean(first_fix_old_goal, na.rm=TRUE), 
+            first_fix_old_goal_se = sd(first_fix_old_goal, na.rm=TRUE) / sqrt(length(first_fix_old_goal)),
             #number of dogs that anticipated the old goal object:
             first_fix_old_goal_sum = sum(first_fix_old_goal==1, na.rm=TRUE), 
             #number of dogs that looked at at least one of the objects:
-            first_fix_old_goal_count = sum(!is.na(first_fix_old_goal)))
+            first_fix_old_goal_count = sum(!is.na(first_fix_old_goal)),
+            first_fix_old_side_mean = mean(first_fix_old_side, na.rm=TRUE),
+            first_fix_old_side_se = sd(first_fix_old_side, na.rm=TRUE) / sqrt(length(first_fix_old_side)),
+            #number of dogs that anticipated the old side object:
+            first_fix_old_side_sum = sum(first_fix_old_side==1, na.rm=TRUE), 
+            #number of dogs that looked at at least one of the objects:
+            first_fix_old_side_count = sum(!is.na(first_fix_old_side)))
+
+
 
 al_plot_NAs_included<-ggplot(first4s.data.first.fix.nolooked.included.agg, aes(x = trialtype_agent, y = first_fix_old_goal_mean)) +
   geom_bar(stat="identity") + 
@@ -303,6 +327,8 @@ al_plot_NAs_included<-ggplot(first4s.data.first.fix.nolooked.included.agg, aes(x
   theme(axis.title = element_text(size = 16))
 ```
 
+
+
 ```{r}
 ggsave(filename="graphs/AL_NAs_included.png",
   plot = al_plot_NAs_included,
@@ -313,6 +339,30 @@ ggsave(filename="graphs/AL_NAs_included.png",
 ```
 
 
+```{r}
+first4s.data.first.fix.nolooked.included.se.long <- first4s.data.first.fix.nolooked.included.agg %>%
+  select(trialtype_agent, session_withinagent, first_fix_old_goal = first_fix_old_goal_se, first_fix_old_side = first_fix_old_side_se) %>%
+  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "IA", values_to = "se.dogs")
+
+first4s.data.first.fix.nolooked.included.agg.long <- first4s.data.first.fix.nolooked.included.agg %>%
+  select(trialtype_agent, session_withinagent, first_fix_old_goal = first_fix_old_goal_mean, first_fix_old_side = first_fix_old_side_mean) %>%
+  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "IA", values_to = "prop.dogs") %>%
+  full_join(first4s.data.first.fix.nolooked.included.se.long)
+
+al_plot_NAs_included2<-ggplot(first4s.data.first.fix.nolooked.included.agg.long, aes(x = trialtype_agent, y = prop.dogs, fill = IA)) +
+  geom_bar(stat="identity", position = position_dodge(0.9)) + 
+  geom_errorbar(aes(ymin = prop.dogs - se.dogs, ymax = prop.dogs + se.dogs), width = 0.2, position = position_dodge(0.9))+
+  facet_wrap(~session_withinagent)+
+  ylim(0,1)+
+  ylab("Prop. dogs")+
+  xlab("Agent")+
+  theme(axis.text = element_text(size = 14))+  #axis text size 
+  theme(axis.title = element_text(size = 16)) +
+  theme_bw() +
+  scale_fill_manual(values = c("darkorange", "dodgerblue"), labels = c(first_fix_old_goal = "old goal", first_fix_old_side = "old side"))
+
+al_plot_NAs_included2
+```
 
 ## first fixation (binary model and no fixations are treated as NA)
 ```{r}
@@ -321,13 +371,13 @@ hist(first4s.data.first.fix$first_fix_old_goal_withoutNA)
 
 fit model
 ```{r}
-mm1_first_fix_withoutNA=glmer(first_fix_old_goal_withoutNA ~ trialtype_agent+z.session+agent_first +
-            (1+trialtype_agent.c + z.session|subject),
+mm1_first_fix_withoutNA=glmer(first_fix_old_goal_withoutNA ~ trialtype_agent+z.session_within+agent_first +
+            (1+trialtype_agent.c + z.session_within|subject),
              data=first4s.data.first.fix, family=binomial, 
             control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 #prune random slope structure due to convergence warning
-mm1_first_fix_withoutNA2=glmer(first_fix_old_goal_withoutNA ~ trialtype_agent+z.session+agent_first +
-            (1|subject)+(0+trialtype_agent.c + z.session|subject),#removed the correlation between random intercept and random slope
+mm1_first_fix_withoutNA2=glmer(first_fix_old_goal_withoutNA ~ trialtype_agent+z.session_within+agent_first +
+            (1|subject)+(0+trialtype_agent.c|subject),#removed the correlation between random intercept and random slope
              data=first4s.data.first.fix, family=binomial, 
             control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 #model has unusually large predictor estimates and variance of the random slopes
@@ -462,16 +512,126 @@ ggsave(filename="graphs/AL_plot_NAs_excluded.png",
 ```
 
 
-## intercept only model ( to test whether the dogs have a preference for the new goal in the human condition)
+## latency of anticipatory looks by IA
+New approach: use latency of anticipatory looks to old goal and old site as response variable and we include IA and Agent and their interaction as predictors. 
 
 ```{r}
-mm1_first_fix_intercept_only=glmer(first_fix_old_goal_withoutNA ~ +z.session+agent_first.c +
-            (1|subject),
-             data=first4s.data.first.fix, family=binomial, 
-            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
-summary(mm1_first_fix_intercept_only)
+first4s.data.latency.first.fix <- first4s.data %>%
+  filter(condition != "fam") %>% #keep only test trials
+  filter(grepl("AL", IA_LABEL)) %>% #keep only AL AoIs (smaller)
+  select(
+    subject,
+    session_number,
+    IA_fam_object ,
+    condition,
+    trial_type,
+    trialtype_agent,
+    agent_target_side_first,
+    IA_FIRST_FIXATION_TIME,
+    attention_getter_duration
+  ) %>%
+  mutate(IA_FIRST_FIXATION_TIME_corrected = IA_FIRST_FIXATION_TIME - attention_getter_duration)%>%
+  select(-IA_FIRST_FIXATION_TIME, -attention_getter_duration)%>%
+  pivot_wider(names_from = IA_fam_object, values_from = IA_FIRST_FIXATION_TIME_corrected)  %>%
+      separate(
+        agent_target_side_first,
+        into = c("agent_first", "object_first", "side_first"),
+        #shown to the dog in the first session
+        sep = "_"
+      ) %>%
+      mutate(
+        session_number = as.numeric(session_number),
+        session_withinagent = as.numeric(ifelse(
+          session_number >= 3, session_number - 2, session_number
+        ))
+      )
+
+#numbers of trials in which the dogs looked at least at one of the two areas of interest (old goal or old side)
+first4s.data.latency.first.fix %>%
+  group_by(trialtype_agent, session_withinagent) %>%
+  summarise(
+    old_side_count = sum(!is.na(new_goal_old_side)),
+    old_goal_count = sum(!is.na(old_goal_new_side)),
+    both_count = sum(!is.na(new_goal_old_side) &
+                       !is.na(old_goal_new_side)),
+    either_count = sum(!is.na(new_goal_old_side) |
+                         !is.na(old_goal_new_side))
+  )
+```
+```{r}
+first4s.data.latency.first.fix.long <- first4s.data.latency.first.fix %>%
+  pivot_longer(cols = c(old_goal_new_side, new_goal_old_side), names_to = "IA", values_to = "latency") %>%
+  filter(!is.na(latency))
+
+table(first4s.data.latency.first.fix.long$subject, first4s.data.latency.first.fix.long$trialtype_agent)
+table(first4s.data.latency.first.fix.long$subject, first4s.data.latency.first.fix.long$IA)
 ```
 
+
+```{r}
+xx.fe.re=fe.re.tab(fe.model="latency ~ IA * trialtype_agent",
+re="(1|subject)", data=first4s.data.latency.first.fix.long)
+xx.fe.re$summary
+```
+
+fit model
+```{r}
+
+mm1.latency<-lme4::lmer(latency ~ IA * trialtype_agent +
+            (1|subject), data=first4s.data.latency.first.fix.long, REML=FALSE)
+
+```
+
+
+```{r}
+diagnostics.plot(mm1.latency, size.fac=2)
+
+ranef.diagn.plot(mm1.latency)
+```
+
+Individual fixed effects
+```{r}
+summary(mm1.latency)
+drop1(mm1.latency, test = "Chisq")
+library(lmerTest)
+
+mm1.latency.reml<-lmerTest::lmer(latency ~ IA * trialtype_agent +
+            (1|subject), data=first4s.data.latency.first.fix.long, REML=TRUE)
+summary(mm1.latency.reml)
+
+```
+```{r}
+first4s.data.latency.first.fix.long.agg<- first4s.data.latency.first.fix.long %>%
+  group_by(trialtype_agent, IA, subject)%>%
+  summarise(mean_latency = mean(latency))
+library(ggbeeswarm)
+ggplot(first4s.data.latency.first.fix.long.agg, aes(x = trialtype_agent, y = mean_latency, fill = IA)) +
+  geom_boxplot(position = position_dodge(0.8), outlier.colour = "white") +
+  #geom_quasirandom(method = "pseudorandom", width=0.2, position = position_dodge(0.8))+
+  geom_jitter(position = position_dodge(0.8), alpha=.2)+
+  theme_bw()
+
+```
+```{r}
+first4s.data.latency.first.fix.long$IA_rel = relevel(as.factor(first4s.data.latency.first.fix.long$IA), ref = "old_goal_new_side")
+
+levels(first4s.data.latency.first.fix.long$IA_rel)
+
+mm1.latency.reml_rel<-lmerTest::lmer(latency ~ IA_rel * trialtype_agent +
+            (1|subject), data=first4s.data.latency.first.fix.long, REML=TRUE)
+summary(mm1.latency.reml_rel)
+```
+```{r}
+first4s.data.latency.first.fix.long$trialtype_agent_rel = relevel(as.factor(first4s.data.latency.first.fix.long$trialtype_agent), ref = "inanimate")
+
+levels(first4s.data.latency.first.fix.long$trialtype_agent_rel)
+
+mm1.latency.reml_rel2<-lmerTest::lmer(latency ~ IA * trialtype_agent_rel +
+            (1|subject), data=first4s.data.latency.first.fix.long, REML=TRUE)
+summary(mm1.latency.reml_rel2)
+```
+
+ 
 
 
 
