@@ -342,14 +342,14 @@ ggsave(filename="graphs/AL_NAs_included.png",
 ```{r}
 first4s.data.first.fix.nolooked.included.se.long <- first4s.data.first.fix.nolooked.included.agg %>%
   select(trialtype_agent, session_withinagent, first_fix_old_goal = first_fix_old_goal_se, first_fix_old_side = first_fix_old_side_se) %>%
-  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "IA", values_to = "se.dogs")
+  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AOI", values_to = "se.dogs")
 
 first4s.data.first.fix.nolooked.included.agg.long <- first4s.data.first.fix.nolooked.included.agg %>%
   select(trialtype_agent, session_withinagent, first_fix_old_goal = first_fix_old_goal_mean, first_fix_old_side = first_fix_old_side_mean) %>%
-  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "IA", values_to = "prop.dogs") %>%
+  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AOI", values_to = "prop.dogs") %>%
   full_join(first4s.data.first.fix.nolooked.included.se.long)
 
-al_plot_NAs_included2<-ggplot(first4s.data.first.fix.nolooked.included.agg.long, aes(x = trialtype_agent, y = prop.dogs, fill = IA)) +
+al_plot_NAs_included2<-ggplot(first4s.data.first.fix.nolooked.included.agg.long, aes(x = trialtype_agent, y = prop.dogs, fill = AOI)) +
   geom_bar(stat="identity", position = position_dodge(0.9)) + 
   geom_errorbar(aes(ymin = prop.dogs - se.dogs, ymax = prop.dogs + se.dogs), width = 0.2, position = position_dodge(0.9))+
   facet_wrap(~session_withinagent)+
@@ -362,6 +362,14 @@ al_plot_NAs_included2<-ggplot(first4s.data.first.fix.nolooked.included.agg.long,
   scale_fill_manual(values = c("darkorange", "dodgerblue"), labels = c(first_fix_old_goal = "old goal", first_fix_old_side = "old side"))
 
 al_plot_NAs_included2
+```
+```{r}
+ggsave(filename="graphs/AL_NAs_excluded_AOIs.png",
+  plot = al_plot_NAs_included2,
+  width=8.5,
+  height=5,
+  scale=0.55,
+  dpi=1200)
 ```
 
 ## first fixation (binary model and no fixations are treated as NA)
@@ -574,7 +582,7 @@ re="(1|subject)", data=first4s.data.latency.first.fix.long)
 xx.fe.re$summary
 ```
 
-fit model
+fit model (testing whether the latency to look at both AOIs is modulated by the interaction between AOI and agent)
 ```{r}
 
 mm1.latency<-lme4::lmer(latency ~ IA * trialtype_agent +
@@ -598,6 +606,7 @@ library(lmerTest)
 mm1.latency.reml<-lmerTest::lmer(latency ~ IA * trialtype_agent +
             (1|subject), data=first4s.data.latency.first.fix.long, REML=TRUE)
 summary(mm1.latency.reml)
+#in the inanimate condition, dogs' latency to look at the old side is lower than in the human condition
 
 ```
 ```{r}
@@ -605,13 +614,26 @@ first4s.data.latency.first.fix.long.agg<- first4s.data.latency.first.fix.long %>
   group_by(trialtype_agent, IA, subject)%>%
   summarise(mean_latency = mean(latency))
 library(ggbeeswarm)
-ggplot(first4s.data.latency.first.fix.long.agg, aes(x = trialtype_agent, y = mean_latency, fill = IA)) +
+
+latency_AL_AOIs_plot<-ggplot(first4s.data.latency.first.fix.long.agg, aes(x = trialtype_agent, y = mean_latency, fill = IA)) +
   geom_boxplot(position = position_dodge(0.8), outlier.colour = "white") +
   #geom_quasirandom(method = "pseudorandom", width=0.2, position = position_dodge(0.8))+
   geom_jitter(position = position_dodge(0.8), alpha=.2)+
+  scale_fill_manual(values=c("dodgerblue", "darkorange"), labels= c("old side","old goal"))+
+  ylab("Mean latency to first fix.")+
+  xlab("Agent")+
   theme_bw()
-
+latency_AL_AOIs_plot
 ```
+```{r}
+ggsave(filename="graphs/latency_AL_AOIs.png",
+  plot = latency_AL_AOIs_plot,
+  width=8.5,
+  height=5,
+  scale=0.55,
+  dpi=1200)
+```
+#model relevelled so that old goal is the new reference category
 ```{r}
 first4s.data.latency.first.fix.long$IA_rel = relevel(as.factor(first4s.data.latency.first.fix.long$IA), ref = "old_goal_new_side")
 
@@ -621,6 +643,7 @@ mm1.latency.reml_rel<-lmerTest::lmer(latency ~ IA_rel * trialtype_agent +
             (1|subject), data=first4s.data.latency.first.fix.long, REML=TRUE)
 summary(mm1.latency.reml_rel)
 ```
+#model relevelled so that agent inanimate is the reference category
 ```{r}
 first4s.data.latency.first.fix.long$trialtype_agent_rel = relevel(as.factor(first4s.data.latency.first.fix.long$trialtype_agent), ref = "inanimate")
 
@@ -629,6 +652,7 @@ levels(first4s.data.latency.first.fix.long$trialtype_agent_rel)
 mm1.latency.reml_rel2<-lmerTest::lmer(latency ~ IA * trialtype_agent_rel +
             (1|subject), data=first4s.data.latency.first.fix.long, REML=TRUE)
 summary(mm1.latency.reml_rel2)
+#In the inanimate condition, dogs' latency to look at the old goal is larger than to look at the old side
 ```
 
  
