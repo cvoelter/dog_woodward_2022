@@ -9,6 +9,7 @@ notes:
 knitr::opts_chunk$set(echo = TRUE)
 #rm(list=ls())
 #remove(list=c("first4s.data_short"))
+#install.packages('TMB', type = 'source')
 library(tidyverse)
 library(summarytools)
 library(lme4)
@@ -199,8 +200,6 @@ first4s.data.first.fix.long <- first4s.data.first.fix %>%
 
 table(first4s.data.first.fix.long$trialtype_agent, first4s.data.first.fix.long$IA)
 mcnemar.test(table(first4s.data.first.fix.long$trialtype_agent, first4s.data.first.fix.long$IA))
-
-
 ```
 
 
@@ -524,6 +523,7 @@ first4s.data.first.fix.agg2<-first4s.data.first.fix %>%
             first_fix_old_side_sum = sum(first_fix_old_goal_withoutNA==0, na.rm=TRUE), #number of dogs that anticipated the old side object
             first_fix_old_goal_count = sum(!is.na(first_fix_old_goal_withoutNA)))#number of dogs that looked at at least one of the objects
 
+#LL: I think these binomial tests can be removed as they were run on the wrong data (multiple observations from the same subjects), and can be replaced by the McNemar test, right?
 #binomial test for
 #human agent
 binom.test(x = first4s.data.first.fix.agg2$first_fix_old_goal_sum[1] , first4s.data.first.fix.agg2$first_fix_old_goal_count[1] )
