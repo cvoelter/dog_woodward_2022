@@ -629,6 +629,14 @@ diagnostics.plot(mm1.latency, size.fac=2)
 
 ranef.diagn.plot(mm1.latency)
 ```
+collinearity for a model lacking the interaction
+```{r}
+library(car)
+xx<-lm(latency ~ IA + trialtype_agent,
+             data=first4s.data.latency.first.fix.long, REML=FALSE)
+vif(xx)
+```
+
 
 Individual fixed effects
 ```{r}
@@ -686,6 +694,47 @@ mm1.latency.reml_rel2<-lmerTest::lmer(latency ~ IA * trialtype_agent_rel +
             (1|subject), data=first4s.data.latency.first.fix.long, REML=TRUE)
 summary(mm1.latency.reml_rel2)
 #In the inanimate condition, dogs' latency to look at the old goal is larger than to look at the old side
+```
+model stability: latency 
+
+```{r}
+source("functions/glmm_stability.r")
+full.stab.mm1.latency=glmm.model.stab(model.res=mm1.latency, contr=NULL,
+para=F, data=NULL)
+
+table(full.stab.mm1.latency$detailed$lme4.warnings)
+table(full.stab.mm1.latency$detailed$opt.warnings)#no warnings
+
+#table with model stability
+round(full.stab.mm1.latency$summary[, -1], 3)
+
+#plotting stability
+is.re.latency=grepl(x=rownames(full.stab.mm1.latency$summary), pattern="@")
+m.stab.plot(full.stab.mm1.latency$summary[!is.re.latency, -1])#fixed effects
+m.stab.plot(full.stab.mm1.latency$summary[is.re.latency, -1])#random effect
+```
+confidence intervals: latency
+```{r}
+source("functions/boot_glmm.r")
+boot.full.mm1.latency=boot.glmm.pred(model.res=mm1.latency, excl.warnings=F,
+nboots=1000, para=T, n.cores=3, resol=1000, level=0.95)
+round(boot.full.mm1.latency$ci.estimates, 3)
+#visualize cis
+m.stab.plot(boot.full.mm1.latency$ci.estimates)
+```
+###Output table: latency
+```{r}
+model_table_dwell_time<- bind_cols(as.data.frame(summary(mm1.latency)$coefficients),
+                             boot.full.mm1.latency$ci.estimates[1:4,],
+                             drop1_mm1.latency) %>% #continue from here: replace drop1 with lmertest output
+                             select(Estimate, SE = `Std. Error`, LowerCI = X2.5., UpperCI = X97.5.,z=`z value`, p=`Pr(>|z|)`,  Chi2 = LRT, df = Df, p_LRT = `Pr(>Chi)`) %>%
+  mutate(across(.cols = c(p, p_LRT), ~ format(round(.x, 3), nsmall=3))) %>% 
+  mutate(across(.cols = c(Estimate:z, Chi2), ~ format(round(.x, 2), nsmall=2))) %>% 
+#  mutate(across(Chi2:p_LRT, ~replace_na(.x, "")))%>%
+mutate(p_LRT=replace(p_LRT, p_LRT==0.000, "<0.001"))%>%
+mutate(p=replace(p, p==0.000, "<0.001"))
+
+write.csv(model_table_dwell_time, file = "saves/mm1_beta_prop_looking_time_IAobject_IPfirst4s.csv")
 ```
 
 
