@@ -1,0 +1,6 @@
+,Estimate,SE,LowerCI,UpperCI,Chi2,df,p_LRT,min,max
+(Intercept),-0.81,0.59,-1.98,0.39,  NA,NA,   NA,-5.73,-0.6
+trialtype_agentinanimate,0.74,0.55,-0.33,1.8,1.78,1,0.182,0.5,5.63
+z.session_within,0.23,0.23,-0.2,0.62,1.26,1,0.261,0.11,4.4
+agent_firstinanimate,-0.51,0.39,-1.33,0.26,1.69,1,0.194,-5.56,-0.22
+old_goal_objectelephant,0.66,0.58,-0.53,1.73,1.44,1,0.23,0.48,3.35

@@ -61,7 +61,7 @@ full.trial.data <-
     "IA_DWELL_TIME_%",
     IA_FIXATION_COUNT,
     "IA_FIXATION_%",
-    IA_FIRST_FIXATION_INDEX, #Ordinal sequence of the first fixation that       #was within the current interest area.
+    IA_FIRST_FIXATION_INDEX, #Ordinal sequence of the first fixation that was within the current interest area.
     IA_FIRST_FIXATION_VISITED_IA_COUNT, #number of different interest areas
     #visited so far before the first fixation is made to the
     #current interest area.
@@ -107,7 +107,7 @@ Next steps: check these values using the sample report.
 
 
 
-###############################################################################
+############################################################################### LL: what follows is already in the script  "anticipatory looking", hence could be deleted from here, right?
 ```{r}
 
 first4s.data.first.fix <- first4s.data %>%
@@ -395,7 +395,7 @@ ggplot(first4s.data.first.fix.agg, aes(x = trialtype_agent, y = first_fix_old_go
   ylim(0,1)
 ```
 
-## intercept only model ( to test whether the dogs have a preference for the new goal in the human condition)
+## intercept only model ( to test whether the dogs have a preference for the new goal in the human condition) LL: why in the human condition? The factor agent_type is not in the model
 
 ```{r}
 mm1_first_fix_intercept_only=glmer(first_fix_old_goal_withoutNA ~ +z.session+agent_first.c +

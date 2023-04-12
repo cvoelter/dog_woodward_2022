@@ -374,15 +374,15 @@ ggsave(filename="graphs/AL_NAs_included.png",
 ```{r}
 first4s.data.first.fix.nolooked.included.se.long <- first4s.data.first.fix.nolooked.included.agg %>%
   select(trialtype_agent, session_withinagent, first_fix_old_goal = first_fix_old_goal_se, first_fix_old_side = first_fix_old_side_se) %>%
-  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AOI", values_to = "se.dogs")
+  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "se.dogs")
 
 first4s.data.first.fix.nolooked.included.agg.long <- first4s.data.first.fix.nolooked.included.agg %>%
   select(trialtype_agent, session_withinagent, first_fix_old_goal = first_fix_old_goal_mean, first_fix_old_side = first_fix_old_side_mean) %>%
-  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AOI", values_to = "prop.dogs") %>%
+  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "prop.dogs") %>%
   full_join(first4s.data.first.fix.nolooked.included.se.long)
 
-al_plot_NAs_included2<-ggplot(first4s.data.first.fix.nolooked.included.agg.long, aes(x = trialtype_agent, y = prop.dogs, fill = AOI)) +
-  geom_bar(stat="identity", position = position_dodge(0.9)) + 
+al_plot_NAs_included2<-ggplot(first4s.data.first.fix.nolooked.included.agg.long, aes(x = trialtype_agent, y = prop.dogs, fill = AoI)) +
+  geom_bar(stat="identity", position = position_dodge(0.9), alpha=0.8) + 
   geom_errorbar(aes(ymin = prop.dogs - se.dogs, ymax = prop.dogs + se.dogs), width = 0.2, position = position_dodge(0.9))+
   facet_wrap(~session_withinagent)+
   ylim(0,1)+
@@ -391,9 +391,11 @@ al_plot_NAs_included2<-ggplot(first4s.data.first.fix.nolooked.included.agg.long,
   theme(axis.text = element_text(size = 14))+  #axis text size 
   theme(axis.title = element_text(size = 16)) +
   theme_bw() +
-  scale_fill_manual(values = c("darkorange", "dodgerblue"), labels = c(first_fix_old_goal = "old goal", first_fix_old_side = "old side"))
+  scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("old goal","old side"))
 
 al_plot_NAs_included2
+
+
 ```
 ```{r}
 ggsave(filename="graphs/AL_NAs_excluded_AOIs.png",
@@ -552,9 +554,19 @@ ggsave(filename="graphs/AL_plot_NAs_excluded.png",
        dpi=1200)
 ```
 
+## intercept only model (to test whether the dogs have a preference for the new goal in the human condition) LL: why in the human condition? The factor agent_type is not in the model
+## why is agent_first centered and not just agent first?
+
+```{r}
+mm1_first_fix_intercept_only=glmer(first_fix_old_goal_withoutNA ~ +z.session+agent_first.c +
+            (1|subject),
+             data=first4s.data.first.fix, family=binomial, 
+            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+summary(mm1_first_fix_intercept_only)
+```
 
 ## latency of anticipatory looks by IA
-New approach: use latency of anticipatory looks to old goal and old site as response variable and we include IA and Agent and their interaction as predictors. 
+Use latency of anticipatory looks to old goal and old site as response variable and we include IA and Agent and their interaction as predictors. 
 
 ```{r}
 first4s.data.latency.first.fix <- first4s.data %>%
@@ -641,7 +653,7 @@ vif(xx)
 Individual fixed effects
 ```{r}
 summary(mm1.latency)
-drop1(mm1.latency, test = "Chisq")
+#drop1(mm1.latency, test = "Chisq") can be deleted?
 library(lmerTest)
 
 mm1.latency.reml<-lmerTest::lmer(latency ~ IA * trialtype_agent +
@@ -654,15 +666,30 @@ summary(mm1.latency.reml)
 first4s.data.latency.first.fix.long.agg<- first4s.data.latency.first.fix.long %>%
   group_by(trialtype_agent, IA, subject)%>%
   summarise(mean_latency = mean(latency))
+library(viridis)
+install.packages("wesanderson")
+library("wesanderson")
 library(ggbeeswarm)
+library(ggsignif)
 
 latency_AL_AOIs_plot<-ggplot(first4s.data.latency.first.fix.long.agg, aes(x = trialtype_agent, y = mean_latency, fill = IA)) +
-  geom_boxplot(position = position_dodge(0.8), outlier.colour = "white") +
+  geom_boxplot(position = position_dodge(0.8), alpha=0.8, outlier.colour = "white") +
+  #scale_fill_viridis(discrete = TRUE,  option = "viridis", begin=0.25, labels= c("old side","old goal"))+
+  #scale_fill_manual(values=wes_palette("IsleofDogs1"), labels= c("old side","old goal"))+
+  scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("old side","old goal"))+
+  #scale_fill_manual(values=wes_palette("FantasticFox1")[c(3,4)], labels= c("old side","old goal"))+
+  #scale_fill_manual(values=wes_palette("Royal1")[c(2,1)], labels= c("old side","old goal"))+
   #geom_quasirandom(method = "pseudorandom", width=0.2, position = position_dodge(0.8))+
-  geom_jitter(position = position_dodge(0.8), alpha=.2)+
-  scale_fill_manual(values=c("dodgerblue", "darkorange"), labels= c("old side","old goal"))+
+  geom_jitter(position = position_dodge(0.8), alpha=.5, size=2)+
+  #scale_fill_manual(values=c("dodgerblue", "darkorange"), labels= c("old side","old goal"))+
+  ylim(0,4000)+
   ylab("Mean latency to first fix.")+
   xlab("Agent")+
+  #geom_text(x=2, y=3200, label="*", size=6, col="black")+
+  geom_signif(xmin=0.8, xmax=1.8, annotations="*", #LMM, test of fixed effect of agent (involved in interaction)
+              y_position = 3600, tip_length = 0.01)+
+  geom_signif(xmin=1.8, xmax=2.2, annotations="*", #LMM relevelled so that inanimate is the reference category, test of fixed effect of AoI (involved in interaction)
+              y_position = 3900, tip_length = 0.01)+
   theme_bw()
 latency_AL_AOIs_plot
 ```
@@ -710,7 +737,9 @@ round(full.stab.mm1.latency$summary[, -1], 3)
 
 #plotting stability
 is.re.latency=grepl(x=rownames(full.stab.mm1.latency$summary), pattern="@")
+png("graphs/mm1_latency_to_first_fix_first4s_stability_plot.png")
 m.stab.plot(full.stab.mm1.latency$summary[!is.re.latency, -1])#fixed effects
+dev.off()
 m.stab.plot(full.stab.mm1.latency$summary[is.re.latency, -1])#random effect
 ```
 confidence intervals: latency
@@ -724,20 +753,18 @@ m.stab.plot(boot.full.mm1.latency$ci.estimates)
 ```
 ###Output table: latency
 ```{r}
-model_table_dwell_time<- bind_cols(as.data.frame(summary(mm1.latency)$coefficients),
-                             boot.full.mm1.latency$ci.estimates[1:4,],
-                             drop1_mm1.latency) %>% #continue from here: replace drop1 with lmertest output
-                             select(Estimate, SE = `Std. Error`, LowerCI = X2.5., UpperCI = X97.5.,z=`z value`, p=`Pr(>|z|)`,  Chi2 = LRT, df = Df, p_LRT = `Pr(>Chi)`) %>%
-  mutate(across(.cols = c(p, p_LRT), ~ format(round(.x, 3), nsmall=3))) %>% 
-  mutate(across(.cols = c(Estimate:z, Chi2), ~ format(round(.x, 2), nsmall=2))) %>% 
-#  mutate(across(Chi2:p_LRT, ~replace_na(.x, "")))%>%
-mutate(p_LRT=replace(p_LRT, p_LRT==0.000, "<0.001"))%>%
-mutate(p=replace(p, p==0.000, "<0.001"))
+model_table_latency_to_first_fix<- bind_cols(as.data.frame(summary(mm1.latency)$coefficients),
+                            boot.full.mm1.latency$ci.estimates[1:4,],
+                            summary(mm1.latency.reml)$coefficients,
+                            full.stab.mm1.latency$summary[1:4, -1])%>% 
+  select(Estimate=`Estimate...1`, SE = `Std. Error...2`, LowerCI = X2.5., UpperCI = X97.5.,t=`t value...10`, Df=`df`, p=`Pr(>|t|)`, `min`, `max`) %>%
+  mutate(across(.cols = c(p), ~ format(round(.x, 3), nsmall=3))) %>% 
+  mutate(across(.cols = c(Estimate:Df, min, max), ~ format(round(.x, 2), nsmall=2))) %>% 
+# mutate(across(Chi2:p_LRT, ~replace_na(.x, "")))%>%
+  mutate(p=replace(p, p==0.000, "<0.001"))
 
-write.csv(model_table_dwell_time, file = "saves/mm1_beta_prop_looking_time_IAobject_IPfirst4s.csv")
+write.csv(model_table_latency_to_first_fix, file = "saves/mm1_latency_first_fix_IPfirst4s.csv")
 ```
-
-
 
 
 ## Proportion dwell time
@@ -795,9 +822,9 @@ first4s.dwell.time$trialtype_agent.c=as.vector(scale(as.numeric(first4s.dwell.ti
 
 
 
-first4s.dwell.time$prop_time_old_goal.scaled <- (first4s.dwell.time$prop_time_old_goal*(length(first4s.dwell.time$prop_time_old_goal) - 1) + 0.5)/length(first4s.dwell.time$prop_time_old_goal)#transform DV to exclude 0 and 1s
+first4s.dwell.time$prop_time_old_goal.scaled <- (first4s.dwell.time$prop_time_old_goal*(length(first4s.dwell.time$prop_time_old_goal) - 1) + 0.5)/length(first4s.dwell.time$prop_time_old_goal)#transform DV to exclude 0s and 1s
 
-
+table(first4s.dwell.time$subject,first4s.dwell.time$prop_time_old_goal.scaled) # 5 dogs never looked at the objects during the first 4 seconds
 ```
 
 
@@ -865,18 +892,18 @@ boot.mm1.beta$ci.estimates$fe
 ### output table
 
 ```{r}
-
-model_table_dwell_time<- bind_cols(as.data.frame(summary(mm1.beta)$coefficients$cond),
+model_table_prop_dwell_time_first4s<- bind_cols(as.data.frame(summary(mm1.beta)$coefficients$cond),
                              boot.mm1.beta$ci.estimates$fe[1:5,],
-                             drop1_mm1.beta) %>%
-                             select(Estimate, SE = `Std. Error`, LowerCI = X2.5., UpperCI = X97.5.,z=`z value`, p=`Pr(>|z|)`,  Chi2 = LRT, df = Df, p_LRT = `Pr(>Chi)`) %>%
-  mutate(across(.cols = c(p, p_LRT), ~ format(round(.x, 3), nsmall=3))) %>% 
-  mutate(across(.cols = c(Estimate:z, Chi2), ~ format(round(.x, 2), nsmall=2))) %>% 
+                             drop1_mm1.beta,
+                             mm1.beta.stab$summary[1:5, -1]) %>%
+                             select(Estimate, SE = `Std. Error`, LowerCI = X2.5., UpperCI = X97.5.,  Chi2 = LRT, df = Df, p_LRT = `Pr(>Chi)`, `min`,`max`) %>%
+  mutate(across(.cols = c(p_LRT), ~ format(round(.x, 3), nsmall=3))) %>% 
+  mutate(across(.cols = c(Estimate:UpperCI, Chi2, min, max), ~ format(round(.x, 2), nsmall=2))) %>% 
 #  mutate(across(Chi2:p_LRT, ~replace_na(.x, "")))%>%
-mutate(p_LRT=replace(p_LRT, p_LRT==0.000, "<0.001"))%>%
-mutate(p=replace(p, p==0.000, "<0.001"))
+mutate(p_LRT=replace(p_LRT, p_LRT==0.000, "<0.001"))#%>%
+#mutate(p=replace(p, p==0.000, "<0.001"))
 
-write.csv(model_table_dwell_time, file = "saves/mm1_beta_prop_looking_time_IAobject_IPfirst4s.csv")
+write.csv(model_table_prop_dwell_time_first4s, file = "saves/mm1_beta_prop_dwell_time_old_goal_IPfirst4s.csv")
 ```
 
 
