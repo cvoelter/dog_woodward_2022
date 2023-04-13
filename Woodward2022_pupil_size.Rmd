@@ -1,0 +1,106 @@
+---
+title: "Woodward 2022 - pupil size"
+output: pdf_document
+date: `13/04/2023`
+author: LL
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(arrow)
+```
+
+
+## load data
+
+```{r}
+demo.data <- read_csv("data/Woodward_2022_counterbalancing.csv") %>%
+  mutate(
+    EDF1 = fct_recode(
+      as.factor(EDF1),
+      "Georgia_1" = "Georgia1",
+    )
+  ) %>%
+  separate(EDF1, c("subject", "num"), sep = "_")%>%
+  select(-num)
+```
+load sample data and add the demographic data
+```{r}
+sample.data<-read_parquet("data/Woodward2022_Sample_Report.parquet") %>%
+    filter(RECORDING_SESSION_LABEL != "Melody_1", RECORDING_SESSION_LABEL != "Mia_5") %>%
+  filter(RECORDING_SESSION_LABEL != "Timo_5", RECORDING_SESSION_LABEL != "Joker_5") %>%
+  separate(RECORDING_SESSION_LABEL, c("subject", "num"), sep = "_")%>%
+  mutate(condition_trial = paste(condition, "_", Trial_Index_)) %>%
+  filter(condition == "fam")%>% #retain familiarisation 
+  full_join(demo.data)%>%
+  mutate(time = TIMESTAMP - IP_START_TIME)
+```
+
+first trial
+```{r}
+sample.data.ft <- sample.data %>%
+  filter(time < 11000) %>%
+   mutate(
+    subject = fct_recode(
+      subject,
+      Georgia = "Georgia1",
+      Georgia = "Georgia2",
+      Georgia = "Georgia3",
+      Georgia = "Georgia4"
+    )) %>%
+  mutate(ref_time = time - agent_arrival_time)%>%
+  mutate(overlapping_IA = ifelse(RIGHT_INTEREST_AREAS == "[ 2, 5 ]" | RIGHT_INTEREST_AREAS == "[ 4, 5 ]", "agent_object",
+                                 ifelse(RIGHT_INTEREST_AREAS == "[ 2 ]" | RIGHT_INTEREST_AREAS == "[ 4 ]", "object",
+                                        ifelse(RIGHT_INTEREST_AREAS == "[ 5 ]", "agent", "")))) %>%
+  mutate(IA_LABEL= ifelse(RIGHT_INTEREST_AREA_LABEL %in% c("ball_left_AOI", "ball_right_AOI", "elephant_left_AOI", "elephant_right_AOI"), RIGHT_INTEREST_AREA_LABEL, "")) %>%
+  mutate(IA_LABEL2 = IA_LABEL, trial_type2 = trial_type) %>%
+  separate(
+    IA_LABEL2,
+    into = c("ia_object", "ia_side", "ia_label_del"),
+    sep = "_"
+  ) %>%
+  separate(
+    trial_type2,
+    into = c("trialtype_agent", "trialtype_object", "trialtype_side"),
+    sep = "_"
+  ) %>%
+  #filter(ia_object == "elephant" | ia_object == "ball") %>%
+  mutate(
+    IA_fam_object = ifelse(ia_object !="" & ia_object == trialtype_object,
+      "target",
+      ifelse(ia_object !="" & ia_object != trialtype_object,
+        "distractor","")))
+```
+
+```{r}
+levels(as.factor(sample.data.ft$session_number))
+levels(as.factor(sample.data.ft$condition))
+levels(as.factor(sample.data.ft$RIGHT_INTEREST_AREAS ))
+levels(as.factor(sample.data.ft$RIGHT_INTEREST_AREA_LABEL))
+levels(as.factor(sample.data.ft$RIGHT_INTEREST_AREA_ID))
+levels(as.factor(sample.data.ft$trial_type))
+levels(as.factor(sample.data.ft$IA_fam_object))
+levels(as.factor(sample.data.ft$ia_object))
+levels(as.factor(sample.data.ft$trialtype_object))
+
+xx<-sample.data.ft%>%filter(RIGHT_INTEREST_AREAS == "[ 2, 5 ]" | RIGHT_INTEREST_AREAS == "[ 4, 5 ]")
+levels(as.factor(xx$RIGHT_INTEREST_AREA_LABEL))
+sample.data.ft%>%filter(is.na(time))
+min(sample.data.ft$time)
+max(sample.data.ft$time)
+
+table(sample.data.ft$IA_LABEL, sample.data.ft$RIGHT_INTEREST_AREA_LABEL)
+table(sample.data.ft$condition, sample.data.ft$subject)
+table(sample.data.ft$age, sample.data.ft$subject)
+table(sample.data.ft$subject, sample.data.ft$session_number)
+object_pref_data<-data.frame(table(sample.data.ft$subject, sample.data.ft$ia_object))%>%
+  filter(Var2!="")%>%
+  pivot_wider(values_from = Freq, names_from = "Var2")
+t.test(object_pref_data$ball, object_pref_data$elephant, paired = TRUE) # no significant preference for one of the objects
+table(sample.data.ft$subject, sample.data.ft$IA_fam_object)
+
+
+```
+
+
