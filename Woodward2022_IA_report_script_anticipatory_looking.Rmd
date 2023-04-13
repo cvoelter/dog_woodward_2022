@@ -666,9 +666,7 @@ summary(mm1.latency.reml)
 first4s.data.latency.first.fix.long.agg<- first4s.data.latency.first.fix.long %>%
   group_by(trialtype_agent, IA, subject)%>%
   summarise(mean_latency = mean(latency))
-library(viridis)
-install.packages("wesanderson")
-library("wesanderson")
+library(wesanderson)
 library(ggbeeswarm)
 library(ggsignif)
 
