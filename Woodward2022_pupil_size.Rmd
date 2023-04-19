@@ -7,6 +7,7 @@ date: `13/04/2023`
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+#rm(list=c("try"))
 #rm(list=ls())
 library(tidyverse)
 library(arrow)
@@ -71,7 +72,7 @@ sample.data<-read_parquet("data/Woodward2022_Sample_Report.parquet") %>%
   filter(condition != "fam")%>% #retain only test trials
   full_join(demo.data)%>%
   mutate(time = TIMESTAMP - IP_START_TIME) %>% 
-  separate(trial_type, into=c("agent", "object", "side"),sep = "_")
+  separate(trial_type, into=c("agent", "object", "side"), sep = "_")
 ```
 
 
@@ -191,8 +192,10 @@ puphist
 ```
 ## Preprocessing: interpolation, baseline correction, down sampling
 ```{r}
-sample.data<-sample.data%>% filter(subject != "Juna" | num != "2") %>%
-                            filter(subject != "Maylo" | num != "3") #exclude the 2 test trials in which the eye was not tracked for more than 30% of the trial time
+sample.data<-sample.data%>% filter(subject != "Juna" | trial_number != "2") %>%
+                            filter(subject != "Maylo" | trial_number != "3") #exclude the 2 test trials in which the eye was not tracked for more than 30% of the trial time
+#check
+table(sample.data$subject, sample.data$trial_number)
 
 # determine baseline
 exp.data.pupil.base <- sample.data %>%
@@ -209,6 +212,8 @@ exp.data.pupil.processed <- sample.data %>%
   ungroup() %>%
   group_by(subject, trial_number) %>%
   mutate(pupil.inter = na.approx(RIGHT_PUPIL_SIZE_no_blinks, na.rm = FALSE, maxgap = 500)) %>% #linear interpolation
+  #LL: now that I excluded the two trials with less than 70% tracked data,
+  #an error occurs that prevents linear interpolation
   full_join(exp.data.pupil.base) %>% #add baseline data
   mutate(pupil.base.corrected = pupil.inter - median.base.pupil)%>% #subtractive baseline correction
   ungroup()%>%
@@ -260,7 +265,7 @@ plot.woodward.pupil.individual<-ggplot(data = exp.data.pupil.processed.downsampl
 plot.woodward.pupil.individual
 #ggsave(plot.woodward.pupil.individual, filename = "graphs/pupil_processed_baseline_corrected_individual.png", height = 7, width = 12, scale = 0.8)
 ```
-# Plot group level data (conditions)
+# Plot group level data (condition)
 ```{r}
 
 pupil.group.level <- exp.data.pupil.processed.downsampled2 %>%
@@ -375,6 +380,7 @@ summary(dat)
 ```{r}
 # Defining events (time series):
 dat$Event <- interaction(dat$subject, dat$test_event, dat$trial_number, drop=TRUE)
+levels(dat$Event)
 
 library(mgcv)
 gammm.int <- bam(pupil_base ~ condition*agent + 
@@ -383,10 +389,10 @@ gammm.int <- bam(pupil_base ~ condition*agent +
              #argument by: fit different smooths for different levels of a categorical variables (factor-smooth interaction)
            s(time, by= agent, k=20) +
            s(Xgaze, Ygaze) +
-           s(time, Event, bs='fs', m=1), #is time needed here or is Event alone sufficient?
+           s(time, Event, bs='fs', m=1), #LL: is time needed here or is Event alone sufficient?
            #bs="fs" is for random wiggly curves: produces a smooth curve for each level of a single factor, treating the curves as entirely random
            data=dat, discrete=TRUE, nthreads=40, method="ML") 
-#why ML instead of REML?
+#LL: why ML instead of REML?
 
 gamm.null <- bam(pupil_base ~ s(time, k=20)+ 
           + s(Xgaze, Ygaze)
@@ -394,7 +400,7 @@ gamm.null <- bam(pupil_base ~ s(time, k=20)+
           , data=dat, discrete=TRUE, nthreads=40, method="ML")
 
 #full-null model comparison 
-compareML(gamm.null, gammm.int) #AIC difference: 29.12, model gammm.int has lower AIC.#is it ok that there is no chisq test? 
+compareML(gamm.null, gammm.int) #AIC difference: 29.12, model gammm.int has lower AIC.#LL: is it ok that there is no chisq test for the difference in ML scores? 
 # "Chi-square test of ML scores
 # -----"?
 
@@ -411,9 +417,8 @@ gamm.full <- bam(pupil_base ~ condition + agent +
            data=dat, discrete=TRUE, nthreads=40, method="ML") 
 
 #LL: the pupil size workspace is too large for GitHub, hence I save it on my laptop
-save.image("~GitHub/dog_woodward_2022/workspaces/pupil_size.RData")
+save.image("C:/Users/lonardol/Desktop/Eye-tracker/Action_understanding_experiments/Kano_Woodward/Woodward_2022/pupil_size.RData")
 
-##########17/04?2023: continue from here
 
 library(mgcViz)
 gam.check(gamm.full)
@@ -427,51 +432,60 @@ acf(resid(gamm.full), plot=FALSE)
 
 ```{r}
 #save gam_check
+#remotes::install_github("m-clark/visibly")
 library(visibly)
-png("graphs/GAMM01_gam_check.png", units="cm", res=600, width=24, height = 18)
-gam_check_plot<-plot_gam_check(m2, scatter=TRUE)
+png("graphs/pupil_gamm.full_gam_check.png", units="cm", res=600, width=24, height = 18)
+gam_check_plot<-plot_gam_check(gamm.full, scatter=TRUE)
 print(gam_check_plot)
 dev.off()
+#LL: the scatterplot of residuals shows a value that is more frequent than others (larger size of one of the dots compared to all others)? 
 
-png("graphs/GAMM01_acf_plot.png", units="cm", res=600, width=12, height = 12)
-acf_plot<-acf(resid(m2), bty='n', main="")
+png("graphs/pupil_gamm.full_acf_plot.png", units="cm", res=600, width=12, height = 12)
+acf_plot<-acf(resid(gamm.full), bty='n', main="")
 print(acf_plot)
 dev.off()
 ```
+```{r}
+summary(gamm.full)
+###Fixed effects:
+#in the new side condition, the pupil is in general larger than in the new goal condition, irrespective of the agent shown (t=2.57, P=0.010).
+#Agent did not have a significant effect (t=1.77, P=0.077)
+```
+
 * difference curve
 ```{r}
 #save data
-plot_diff_m2_tr1_tr2<-plot_diff(m2, view="time", 
-           comp=list(TRIAL_LABEL=c("Trial: 1", "Trial: 2")), rm.ranef=TRUE, 
+plot_diff_gamm.full_newg_news<-plot_diff(gamm.full, view="time", 
+           comp=list(condition=c("new_goal", "new_side")), rm.ranef=TRUE, 
           las=1, ylab="Est. difference in pupil size", 
           col=col2, hide.label = TRUE, plot = FALSE)
 
-plot_diff_m2_tr1_tr2<-ggplot(data=plot_diff_m2_tr1_tr2, aes(x=time, y=est))+
+plot_diff_gamm.full_newg_news<-ggplot(data=plot_diff_gamm.full_newg_news, aes(x=time, y=est))+
   geom_hline(yintercept = 0)+
   geom_path(lty=2)+
   geom_ribbon(aes(x=time, ymin=est-CI, ymax=est+CI), alpha=0.2)+
   theme_bw()+
-  scale_x_continuous(name="Time (in ms)", breaks=c(15000, 16000, 17000, 18000, 19000))+ ylab("Est. difference in pupil size")+ggtitle("Trial 1 - Trial 2")+
+  scale_x_continuous(name="Time (in ms)", breaks=c(5000, 6000, 7000, 8000, 9000))+ ylab("Est. difference in pupil size")+ggtitle("New goal - New side")+
     theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank(),
         panel.grid.major.y = element_blank(),
         panel.grid.minor.y = element_blank())
 
-plot_diff_m2_tr1_tr2
+plot_diff_gamm.full_newg_news
 
-ggsave(plot_diff_m2_tr1_tr2, filename = "graphs/frisbee_triangle_pupilsize_diff_m2.png", width=8, height=6, scale=0.6, dpi=1200)
+ggsave(plot_diff_gamm.full_newg_news, filename = "graphs/pupilsize_diff_gamm.full_condition.png", width=8, height=6, scale=0.6, dpi=600)
 
 ```
 
 * plotting partial effects
 ```{r}
-pdf("graphs/frisbee_triangle_m2_GAMM_partial_effect.pdf", width=10, height = 8)
-plot(m2, pages = 1, all.terms = TRUE, residuals = TRUE, rug=FALSE, pch = 1, cex = 0.5, seWithMean = TRUE, shade = TRUE, shade.col = "lightblue")
+pdf("graphs/pupil_gamm.full_partial_effects.pdf", width=10, height = 8)
+plot(gamm.full, pages = 1, all.terms = TRUE, residuals = TRUE, rug=FALSE, pch = 1, cex = 0.5, seWithMean = TRUE, shade = TRUE, shade.col = "lightblue")
 dev.off()
 
 library(mgcViz)
-b <- getViz(m2)
-png("graphs/frisbee_triangle_m2_GAMM_partial_effect2.png", units="cm", res=600, width=24, height = 16)
+b <- getViz(gamm.full)
+png("graphs/pupil_gamm.full_partial_effect2.png", units="cm", res=600, width=24, height = 16)
 p1<-plot(b, allTerms = T)+theme_classic() + labs(title = NULL)
 print(p1, pages = 1 )
 dev.off()
@@ -480,17 +494,17 @@ dev.off()
 * Summed effects
 ```{r}
 
-plot_smooth(m2, view="time", cond=list(TRIAL_LABEL="Trial: 1"), rm.ranef=TRUE,
+plot_smooth(gamm.full, view="time", cond=list(condition="new_goal"), rm.ranef=TRUE,
   v0=0, col=col2, lwd=2, lty=6, rug=FALSE, se=1.96,
   main="Estimated effects", ylab="Pupil (baselined)", las=1)
 
-plot_smooth(m2, view="time", cond=list(TRIAL_LABEL="Trial: 2"), rm.ranef=TRUE,
+plot_smooth(gamm.full, view="time", cond=list(condition="new_side"), rm.ranef=TRUE,
   v0=0, col=col2, lwd=2, lty=6, rug=FALSE, se=1.96,
   main="Estimated effects", ylab="Pupil (baselined)", las=1)
 
 ```
 
 ```{r}
-tmp <- m2$model
-plot_modelfit(m2, view="time", event=tmp$Event,n = 2)
+tmp <- gamm.full$model
+plot_modelfit(gamm.full, view="time", event=tmp$Event,n = 2)
 ```
