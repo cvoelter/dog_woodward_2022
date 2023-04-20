@@ -1,0 +1,1341 @@
+---
+title: Woodward 2022: Gaze arrival times to the target during familiarisation
+author: Christoph Voelter, LL
+date: 
+output: html_document
+---
+notes: 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#rm(list=ls())
+#remove(list=c("a","b"))
+#install.packages('TMB', type = 'source')
+library(tidyverse)
+library(summarytools)
+library(lme4)
+
+source("./functions/diagnostic_fcns.r")
+source("./functions/glmm_stability.r")
+source("./functions/boot_glmm.r")
+source("./functions/boot_glmm2.r")
+source("./functions/glmmTMB_stability.r")
+source("./functions/boot_glmmTMB.r")
+source("./functions/extract_ranef_gmmTMB.r")
+load("workspaces/fam.RData")
+```
+
+
+```{r}
+save.image("workspaces/fam.RData")
+```
+
+
+```{r}
+demo.data <- read_csv("data/Woodward_2022_counterbalancing.csv") %>%
+  mutate(
+    EDF1 = fct_recode(
+      as.factor(EDF1),
+      "Georgia_1" = "Georgia1",
+    )
+  ) %>%
+  separate(EDF1, c("subject", "num"), sep = "_")
+```
+
+```{r}
+fam.data <-
+  read_delim(
+    "data/Woodward2022_IA_Report_for_combined-agent-object_analysis_IP_fam_first_trial.txt",
+    na = ".",
+    delim = "\t"
+  ) %>%
+  dplyr::select(
+    Session_Name_,
+    IP_LABEL,
+    IA_LABEL,
+    IA_ID,
+    Trial_Index_,
+    condition,
+    dog_session,
+    sub_id,
+    trial_number,
+    trial_type,
+    session_number,
+    video_file,
+    DATA_FILE,
+    IA_AREA,
+    IA_AVERAGE_FIX_PUPIL_SIZE,
+    IA_DWELL_TIME,
+    "IA_DWELL_TIME_%",
+    IA_FIXATION_COUNT,
+    "IA_FIXATION_%",
+    IA_FIRST_FIXATION_INDEX,
+    #Ordinal sequence of the first fixation that       #was within the current interest area.
+    IA_FIRST_FIXATION_VISITED_IA_COUNT,
+    #number of different interest areas
+    #visited so far before the first fixation is made to the
+    #current interest area.
+    IA_MAX_FIX_PUPIL_SIZE,
+    IA_FIRST_FIXATION_TIME,
+    INTEREST_AREA_FIXATION_SEQUENCE,
+    TRIAL_DWELL_TIME,
+    TRIAL_FIXATION_COUNT,
+    TRIAL_IA_COUNT,
+    TRIAL_TOTAL_VISITED_IA_COUNT,
+    IP_START_TIME,
+    TRIAL_START_TIME
+  ) %>%
+  filter(DATA_FILE != "Melody_1.edf", DATA_FILE != "Mia_5.edf") %>%
+  filter(DATA_FILE != "Timo_5.edf", DATA_FILE != "Joker_5.edf") %>% # backup recordings in case the first sessions are below 70% onscreen looking
+  #filter(!(DATA_FILE == "Amy_4.edf" & Trial_Index_ != 1)) %>%
+  #mutate(session.num = as.numeric(session.num)) %>%
+  #mutate(session.num.corrected = ifelse(DATA_FILE == "Amy_4.edf" | DATA_FILE == "Amy_5.edf" | DATA_FILE == "George_5.edf" | DATA_FILE == "Melody_2.edf" | DATA_FILE == #"Melody_3.edf" | DATA_FILE == "Melody_4.edf", session.num-1,
+  #                                        ifelse(DATA_FILE == "Melody_7.edf" | DATA_FILE == "Mia_6.edf", session.num-3, session.num))) %>% #recoding of session number to account for dogs with aborted sessions
+  mutate(
+    Session_Name_ = fct_recode(
+      Session_Name_,
+      Georgia_1 = "Georgia1",
+      Georgia_2 = "Georgia2",
+      Georgia_3 = "Georgia3",
+      Georgia_4 = "Georgia4"
+    )
+  ) %>%
+  separate(Session_Name_, c("subject", "session.num"), sep = "_") %>%
+  mutate(condition_trial = paste(condition, "_", Trial_Index_)) %>%
+  full_join(demo.data) %>%
+  mutate(IA_LABEL2 = IA_LABEL, trial_type2 = trial_type) %>%
+  separate(
+    IA_LABEL2,
+    into = c("ia_object", "ia_side", "ia_label_del", "ia_label_del2"),
+    sep = "_"
+  ) %>%
+  separate(
+    trial_type2,
+    into = c("trialtype_agent", "trialtype_object", "trialtype_side"),
+    sep = "_"
+  ) %>%
+  filter(!grepl("AL", IA_LABEL)) %>%
+  filter(condition == "fam") %>%
+  mutate(IA_LABEL = ifelse(               #rename some IA_LABELS that had the wrong label in the viewing session
+    (subject == "Ace" &
+       grepl("human", IA_LABEL)) |
+      (subject == "George" &
+         grepl("human", IA_LABEL)) |
+      (subject == "Georgia" &
+         grepl("human", IA_LABEL)) |
+      (subject == "Joker" &
+         grepl("human", IA_LABEL)) |
+      (subject == "Lenny" &
+         grepl("human", IA_LABEL)) |
+      (subject == "Melody" &
+         grepl("human", IA_LABEL)) |
+      (subject == "Mia" &
+         grepl("human", IA_LABEL)),
+    "fam_dyn_human_elephant_left",
+    ifelse(
+      (subject == "Juna" &
+         grepl("human", IA_LABEL)) |
+        (subject == "Maylo" &
+           grepl("human", IA_LABEL)) |
+        (subject == "Milo" &
+           grepl("human", IA_LABEL)) |
+        (subject == "Timo" &
+           grepl("human", IA_LABEL)) |
+        (subject == "Zserbo" &
+           grepl("human", IA_LABEL)),
+      "fam_dyn_human_ball_right",
+      IA_LABEL
+    )
+  )) %>% 
+  mutate(attention_getter_duration = IP_START_TIME - TRIAL_START_TIME)
+
+levels(as.factor(fam.data$IA_LABEL))
+
+
+  # mutate(
+  #   IA_fam_object = ifelse(
+  #     condition == "new_goal" &
+  #       ia_object == trialtype_object,
+  #     "new_goal_old_side",
+  #     ifelse(
+  #       condition == "new_goal" &
+  #         ia_object != trialtype_object,
+  #       "old_goal_new_side",
+  #       ifelse(
+  #         condition == "new_side" &          #refers to test conditions, excluded from this analysis
+  #           ia_object != trialtype_object,
+  #         "new_goal_old_side",
+  #         ifelse(
+  #           condition == "new_side" &
+  #             ia_object == trialtype_object,
+  #           "old_goal_new_side",
+  #           ""
+  #         )
+  #       )
+  #     )
+  #   )
+  # ) %>%
+ 
+
+fam.data %>% select(subject, condition_trial, trial_type, IA_LABEL, 
+                    #IA_fam_object
+                    )
+#IA_fam_object=what the AOI looked at contains
+fam.data %>% select(
+  subject,
+  condition,
+  trial_type,
+  IA_LABEL,
+ #IA_fam_object,
+  IA_FIRST_FIXATION_INDEX,
+  IA_FIRST_FIXATION_VISITED_IA_COUNT
+) 
+
+
+levels(as.factor(fam.data$DATA_FILE))
+levels(as.factor(fam.data$condition))
+table(as.factor(fam.data$DATA_FILE),
+      fam.data$Trial_Index_)
+table(as.factor(fam.data$DATA_FILE),
+      fam.data$session.num)
+table(as.factor(fam.data$DATA_FILE),
+      fam.data$session_number) #use session_number
+```
+
+```{r}
+
+# mutate(IA_fam_object = ifelse(
+#   ia_object != "" & ia_object == trialtype_object,
+#   "target",
+#   ifelse(ia_object != "" & ia_object != trialtype_object,
+#          "distractor", "")
+# ))
+
+
+fam.data.first.fix <- fam.data %>%
+  select(subject,
+         session_number,
+         trial_type,
+         IA_LABEL,
+         IA_FIRST_FIXATION_TIME) %>%
+  mutate(trial_type2 = trial_type) %>%
+  separate(
+    trial_type2,
+    into = c("agent_shown", "target_object", "target_side"),
+    sep = "_"
+  ) %>%
+  mutate(
+    IA_content = fct_recode(
+      IA_LABEL,
+      "elephant" = "elephant_left_AOI",
+      "elephant" = "elephant_right_AOI",
+      "ball" = "ball_right_AOI",
+      "ball" = "ball_left_AOI",
+      "human" = "fam_dyn_human_elephant_left",
+      "human" = "fam_dyn_human_elephant_right" ,
+      "human" = "fam_dyn_human_ball_left",
+      "human" = "fam_dyn_human_ball_right",
+      "inanimate" = "fam_dyn_inanimate_ball_right",
+      "inanimate" = "fam_dyn_inanimate_ball_left",
+      "inanimate" = "fam_dyn_inanimate_elephant_left",
+      "inanimate" = "fam_dyn_inanimate_elephant_right",
+      
+    )
+  ) %>%
+  mutate(IA_content2 = as.factor(ifelse(
+    IA_content == "human"|
+      IA_content == "inanimate",
+    "agent",
+    IA_content
+    
+  ))) %>% 
+#LL: for some reason the levels of IA content are replaced by numbers (ball->1, elephant->2)
+mutate(IA_content2 = fct_recode(IA_content2, "ball"="1", "elephant"="2")) %>% 
+  mutate(IA_content3 = ifelse(IA_content2 == "agent", "agent",
+                              ifelse((IA_content2 == "elephant" |
+                                 IA_content2 == "ball") & IA_content2 == target_object,
+                              "target", "distractor")))
+  
+  
+# levels(fam.data.first.fix$IA_content2)
+# levels(fam.data.first.fix$IA_content)
+# 
+# length(fam.data.first.fix$agent[fam.data.first.fix$agent=="human"]==fam.data.first.fix$IA_content[fam.data.first.fix$IA_content=="human"])
+# length(fam.data.first.fix$agent[fam.data.first.fix$agent=="human"]) 
+# length(fam.data.first.fix$agent[fam.data.first.fix$agent=="inanimate"]==fam.data.first.fix$IA_content[fam.data.first.fix$IA_content=="inanimate"])
+# length(fam.data.first.fix$agent[fam.data.first.fix$agent=="inanimate"]) 
+# #it is never the case that the column agent differs from the content of the AOI containing the agent (checked without length, all logicals are true)
+
+
+fam.data.first.fix.wider <- fam.data.first.fix %>% 
+  filter(!is.na(IA_FIRST_FIXATION_TIME)) %>% 
+  pivot_wider(names_from = IA_content3, values_from = IA_FIRST_FIXATION_TIME) %>% 
+  # group_by(subject, session_number) %>% 
+  # filter(target>agent|distractor>agent) #does not work, excludes all data
+  
+############from AL during test script:##########  
+  mutate(
+    old_goal_new_side = replace_na(old_goal_new_side, 99999999),
+    new_goal_old_side = replace_na(new_goal_old_side, 99999999)
+  ) %>%
+  mutate(
+    first_fix_old_goal = as.numeric(ifelse(
+      old_goal_new_side < new_goal_old_side, 1, 0
+    )),
+    first_fix_old_goal_withoutNA = as.numeric(ifelse(
+      old_goal_new_side == new_goal_old_side,
+      NA,
+      ifelse(old_goal_new_side <
+               new_goal_old_side, 1, 0)
+    )),
+    first_fix_old_side = as.numeric(ifelse(
+      old_goal_new_side > new_goal_old_side, 1, 0
+    )),
+    first_fix_old_side_withoutNA = as.numeric(ifelse(
+      old_goal_new_side == new_goal_old_side,
+      NA,
+      ifelse(old_goal_new_side >
+               new_goal_old_side, 1, 0)
+    ))
+  ) %>%
+  separate(
+    agent_target_side_first,
+    into = c("agent_first", "object_first", "side_first"),
+    #shown to the dog in the first session
+    sep = "_"
+  ) %>%
+  mutate(
+    session_number = as.numeric(session_number),
+    session_withinagent = as.numeric(ifelse(
+      session_number >= 3, session_number - 2, session_number
+    ))
+  )
+
+
+
+# find the first looks to the old goal or old side. If there were first looks to one of the two IAa in both sessions we retained the first session value
+first4s.data.first.fix.long <- fam.data.first.fix %>%
+  filter(first_fix_old_goal == 1 | first_fix_old_side == 1) %>%
+  select(
+    subject,
+    trialtype_agent,
+    session_withinagent,
+    first_fix_old_goal,
+    first_fix_old_side
+  ) %>%
+  pivot_longer(
+    cols = c(first_fix_old_goal, first_fix_old_side),
+    names_to = "IA",
+    values_to = "looked"
+  ) %>%
+  pivot_wider(names_from = session_withinagent, values_from = looked) %>%
+  rename("first.s" = "1", "second.s" = "2") %>%
+  mutate(first.s = replace_na(first.s, 0), second.s = replace_na(second.s, 0))%>%
+  mutate(look_overall = as.numeric(ifelse(first.s == 1, 1, ifelse(second.s == 1, 1, 0))))%>%
+  filter(look_overall ==1)
+
+
+table(first4s.data.first.fix.long$trialtype_agent, first4s.data.first.fix.long$IA)
+mcnemar.test(table(first4s.data.first.fix.long$trialtype_agent, first4s.data.first.fix.long$IA))
+```
+
+
+## first fixation (binary model and no fixations are counted as 0)
+```{r}
+table(first4s.data.first.fix$subject, first4s.data.first.fix$session_number)
+table(first4s.data.first.fix$subject, first4s.data.first.fix$session_withinagent)
+
+first4s.data.first.fix$z.session <-
+  as.vector(scale(
+    as.numeric(first4s.data.first.fix$session_number),
+    center = TRUE,
+    scale = TRUE
+  ))
+
+first4s.data.first.fix$z.session_within <-
+  as.vector(scale(
+    as.numeric(first4s.data.first.fix$session_withinagent),
+    center = TRUE,
+    scale = TRUE
+  ))
+
+first4s.data.first.fix$trialtype_agent <-
+  as.factor(first4s.data.first.fix$trialtype_agent)
+levels(first4s.data.first.fix$trialtype_agent)
+
+first4s.data.first.fix$trialtype_agent.c = as.vector(scale(
+  as.numeric(
+    first4s.data.first.fix$trialtype_agent == levels(as.factor(first4s.data.first.fix$trialtype_agent))[2]
+  ),
+  center = TRUE,
+  scale = FALSE
+))
+
+first4s.data.first.fix$agent_first.c = as.vector(scale(
+  as.numeric(first4s.data.first.fix$agent_first == levels(
+    as.factor(first4s.data.first.fix$agent_first)
+  )[2]),
+  center = TRUE,
+  scale = FALSE
+))
+levels(as.factor(first4s.data.first.fix$z.session))
+hist(first4s.data.first.fix$first_fix_old_goal)
+```
+
+fit model
+```{r}
+mm1_first_fix=glmer(first_fix_old_goal ~ trialtype_agent+z.session_within+agent_first +
+            (1+trialtype_agent.c + z.session_within|subject),
+             data=first4s.data.first.fix, family=binomial, 
+            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+
+#prune random slope structure due to convergence warning (i.e, exclude correlation between random icpt and slopes, remove random slope of session number)
+mm1_first_fix2=glmer(first_fix_old_goal ~ trialtype_agent+z.session_within+agent_first +
+            (1|subject)+(0+trialtype_agent.c|subject),
+             data=first4s.data.first.fix, family=binomial, 
+            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+
+summary(mm1_first_fix2)
+```
+
+
+```{r}
+
+mm1_first_fix2_drop1 <- drop1(mm1_first_fix2, test="Chisq")%>% 
+  filter(!is.na(npar)) %>% 
+  add_row(npar = rep(NA,1),  .before = 1)
+```
+
+
+Check for collinearity
+```{r}
+library(car)
+xx=lm(first_fix_old_goal ~ trialtype_agent+z.session_within+agent_first, data=first4s.data.first.fix)
+vif(xx)
+```
+#### Confidence intervals of the estimates
+```{r}
+mm1_first_fix2.ci=boot.glmm.pred(model.res=mm1_first_fix2, excl.warnings=F,
+nboots=1000, para=T, n.cores="all-1", resol=1000, level=0.95)
+mm1_first_fix2.ci$ci.estimates
+
+```
+
+#### model stability
+```{r}
+m.stab.mm1_first_fix2 <- glmm.model.stab(model.res = mm1_first_fix2)
+m.stab.mm1_first_fix2$detailed$warnings
+m.stab.mm1_first_fix2_output <- as.data.frame(round(m.stab.mm1_first_fix2$summary[, -1], 3))
+m.stab.mm1_first_fix2_output 
+png("graphs/mm1_first_fix2_stability_plot.png")
+m.stab.plot(round(m.stab.mm1_first_fix2$summary[, -1], 3))
+dev.off()
+m.stab.plot(round(m.stab.mm1_first_fix2$summary[, -1], 3))
+# The model appeared to be stable with respect to the fixed effects (see full_model_stability_plot).
+
+```
+
+
+#### output table
+
+
+```{r}
+mm1_first_fix2_output_table <-
+  bind_cols(as.data.frame(summary(mm1_first_fix2)$coeff),
+            mm1_first_fix2_drop1,
+            mm1_first_fix2.ci$ci.estimates,
+           m.stab.mm1_first_fix2_output[1:4,]) %>%
+  select(
+    Estimate,
+    SE = `Std. Error`,
+    LowerCI = X2.5.,
+    UpperCI = X97.5.,
+    Chi2 = LRT,
+    df = npar,
+    p = `Pr(Chi)`,
+    z_wald = `z value`,
+    p_wald = `Pr(>|z|)`,
+    min_stab = min,
+    max_stab = max
+  ) %>% #
+  mutate(across(.cols = c(p), ~ format(round(.x, 3), nsmall = 3))) %>%
+  mutate(across(.cols = c(Estimate:Chi2), ~ format(round(.x, 2), nsmall = 2))) %>%
+  mutate(across(.cols = c(z_wald:max_stab), ~ format(round(.x, 2), nsmall = 2))) %>%
+  #mutate(across(Chi2:p, ~replace_na(.x, "")))%>%
+  mutate(p = replace(p, p == 0, "<0.001"))
+
+write.csv(mm1_first_fix2_output_table, file = "saves/mm1_first_fix2_output_table.csv")
+```
+
+## Plot showing the object looks in the first 4 s of the test trials (including dogs that did not look at any of the objects in a given trial)
+```{r}
+first4s.data.first.fix.nolooked.included.agg<-first4s.data.first.fix %>%
+  group_by(trialtype_agent, session_withinagent) %>%
+  summarise(first_fix_old_goal_mean = mean(first_fix_old_goal, na.rm=TRUE), 
+            first_fix_old_goal_se = sd(first_fix_old_goal, na.rm=TRUE) / sqrt(length(first_fix_old_goal)),
+            #number of dogs that anticipated the old goal object:
+            first_fix_old_goal_sum = sum(first_fix_old_goal==1, na.rm=TRUE), 
+            #number of dogs that looked at at least one of the objects:
+            first_fix_old_goal_count = sum(!is.na(first_fix_old_goal)),
+            first_fix_old_side_mean = mean(first_fix_old_side, na.rm=TRUE),
+            first_fix_old_side_se = sd(first_fix_old_side, na.rm=TRUE) / sqrt(length(first_fix_old_side)),
+            #number of dogs that anticipated the old side object:
+            first_fix_old_side_sum = sum(first_fix_old_side==1, na.rm=TRUE), 
+            #number of dogs that looked at at least one of the objects:
+            first_fix_old_side_count = sum(!is.na(first_fix_old_side)))
+
+
+
+al_plot_NAs_included<-ggplot(first4s.data.first.fix.nolooked.included.agg, aes(x = trialtype_agent, y = first_fix_old_goal_mean)) +
+  geom_bar(stat="identity") + 
+  facet_wrap(~session_withinagent)+
+  ylim(0,1)+
+  ylab("Prop. dogs fixating the old goal first")+
+  xlab("Agent")+
+  theme(axis.text = element_text(size = 14))+  #axis text size 
+  theme(axis.title = element_text(size = 16))
+```
+
+
+
+```{r}
+ggsave(filename="graphs/AL_NAs_included.png",
+  plot = al_plot_NAs_included,
+  width=8.5,
+  height=5,
+  #scale=0.55,
+  dpi=1200)
+```
+
+
+```{r}
+first4s.data.first.fix.nolooked.included.se.long <- first4s.data.first.fix.nolooked.included.agg %>%
+  select(trialtype_agent, session_withinagent, first_fix_old_goal = first_fix_old_goal_se, first_fix_old_side = first_fix_old_side_se) %>%
+  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "se.dogs")
+
+first4s.data.first.fix.nolooked.included.agg.long <- first4s.data.first.fix.nolooked.included.agg %>%
+  select(trialtype_agent, session_withinagent, first_fix_old_goal = first_fix_old_goal_mean, first_fix_old_side = first_fix_old_side_mean) %>%
+  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "prop.dogs") %>%
+  full_join(first4s.data.first.fix.nolooked.included.se.long)
+
+al_plot_NAs_included2<-ggplot(first4s.data.first.fix.nolooked.included.agg.long, aes(x = trialtype_agent, y = prop.dogs, fill = AoI)) +
+  geom_bar(stat="identity", position = position_dodge(0.9), alpha=0.8) + 
+  geom_errorbar(aes(ymin = prop.dogs - se.dogs, ymax = prop.dogs + se.dogs), width = 0.2, position = position_dodge(0.9))+
+  facet_wrap(~session_withinagent)+
+  ylim(0,1)+
+  ylab("Prop. dogs")+
+  xlab("Agent")+
+  theme(axis.text = element_text(size = 14))+  #axis text size 
+  theme(axis.title = element_text(size = 16)) +
+  theme_bw() +
+  scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("old goal","old side"))
+
+al_plot_NAs_included2
+
+
+```
+```{r}
+ggsave(filename="graphs/AL_NAs_excluded_AOIs.png",
+  plot = al_plot_NAs_included2,
+  width=8.5,
+  height=5,
+  scale=0.55,
+  dpi=1200)
+```
+
+## first fixation (binary model and no fixations are treated as NA)
+```{r}
+hist(first4s.data.first.fix$first_fix_old_goal_withoutNA)
+```
+
+fit model
+```{r}
+mm1_first_fix_withoutNA=glmer(first_fix_old_goal_withoutNA ~ trialtype_agent+z.session_within+agent_first +
+            (1+trialtype_agent.c + z.session_within|subject),
+             data=first4s.data.first.fix, family=binomial, 
+            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+#prune random slope structure due to convergence warning
+mm1_first_fix_withoutNA2=glmer(first_fix_old_goal_withoutNA ~ trialtype_agent+z.session_within+agent_first +
+            (1|subject)+(0+trialtype_agent.c|subject),#removed the correlation between random intercept and random slope
+             data=first4s.data.first.fix, family=binomial, 
+            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+#model has unusually large predictor estimates and variance of the random slopes
+summary(mm1_first_fix_withoutNA2)
+mm1_first_fix_withoutNA2_drop1<-drop1(mm1_first_fix_withoutNA2, test="Chisq")
+```
+
+pruned model (random slope of z.session removed)
+```{r}
+mm1_first_fix_withoutNA2_pruned=glmer(first_fix_old_goal_withoutNA ~ trialtype_agent+z.session+agent_first +
+            (1|subject)+(0+trialtype_agent.c|subject),#removed the correlation between random intercept and random slope and the random slope of session
+             data=first4s.data.first.fix, family=binomial, 
+            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+# estimates and random slope variance look better (values are smaller)
+#null model because drop 1 does not converge
+mm1_first_fix_withoutNA2_pruned_null=glmer(first_fix_old_goal_withoutNA ~ z.session+agent_first +
+            (1|subject)+(0+trialtype_agent.c|subject),#removed the correlation between random intercept and random slope
+             data=first4s.data.first.fix, family=binomial, 
+            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+anova(mm1_first_fix_withoutNA2_pruned, mm1_first_fix_withoutNA2_pruned_null, test = "Chisq")
+#--> agent not significant 
+summary(mm1_first_fix_withoutNA2_pruned)
+drop1(mm1_first_fix_withoutNA2_pruned, test = "Chisq") #does not converge
+```
+
+
+
+Check for collinearity - model without NAs
+```{r}
+library(car)
+xx=lm(first_fix_old_goal_withoutNA ~ trialtype_agent+z.session+agent_first, data=first4s.data.first.fix)
+vif(xx)
+```
+#### Confidence intervals of the estimates
+```{r}
+mm1_first_fix2_withoutNAs.ci=boot.glmm.pred(model.res=mm1_first_fix_withoutNA2, excl.warnings=F,
+nboots=1000, para=T, n.cores="all-1", resol=1000, level=0.95)
+mm1_first_fix2_withoutNAs.ci$ci.estimates
+
+```
+
+#### model stability
+```{r}
+m.stab.mm1_first_fix2_withoutNAs <- glmm.model.stab(model.res = mm1_first_fix_withoutNA2)
+m.stab.mm1_first_fix2_withoutNAs$detailed$warnings #models failed to converge
+m.stab.mm1_first_fix2_withoutNAs_output <- as.data.frame(round(m.stab.mm1_first_fix2_withoutNAs$summary[, -1], 3))
+m.stab.mm1_first_fix2_withoutNAs_output 
+png("graphs/mm1_first_fix2_withoutNAs_stability_plot.png")
+m.stab.plot(round(m.stab.mm1_first_fix2_withoutNAs$summary[, -1], 3))
+#dev.off()
+# The estimates do not look reasonable
+```
+
+
+#### output table
+
+
+```{r}
+mm1_first_fix2_withoutNAs_output_table <-
+  bind_cols(as.data.frame(summary(mm1_first_fix_withoutNA2)$coeff),
+            mm1_first_fix_withoutNA2_drop1,
+            mm1_first_fix2_withoutNAs.ci$ci.estimates,
+            m.stab.mm1_first_fix2_withoutNAs_output[1:4,]) %>%
+  select(
+    Estimate,
+    SE = `Std. Error`,
+    LowerCI = X2.5.,
+    UpperCI = X97.5.,
+    Chi2 = LRT,
+    df = npar,
+    p = `Pr(Chi)`,
+    z_wald = `z value`,
+    p_wald = `Pr(>|z|)`,
+    min_stab = min,
+    max_stab = max
+  ) %>% #
+  mutate(across(.cols = c(p), ~ format(round(.x, 3), nsmall = 3))) %>%
+  mutate(across(.cols = c(Estimate:Chi2), ~ format(round(.x, 2), nsmall = 2))) %>%
+  mutate(across(.cols = c(z_wald:max_stab), ~ format(round(.x, 2), nsmall = 2))) %>%
+  #mutate(across(Chi2:p, ~replace_na(.x, "")))%>%
+  mutate(p = replace(p, p == 0, "<0.001"))
+
+write.csv(mm1_first_fix2_withoutNAs_output_table, file = "saves/mm1_first_fix2_withoutNAs_output_table.csv")
+```
+
+## Plot showing the object looks in the first 4 s of the test trials (without dogs that did not look not at any of the objects in a given trial)
+```{r}
+first4s.data.first.fix.agg<-first4s.data.first.fix %>%
+  group_by(trialtype_agent, agent_first, session_withinagent) %>%
+  summarise(first_fix_old_goal_mean = mean(first_fix_old_goal_withoutNA, na.rm=TRUE), 
+            #number of dogs that anticipated the old goal object:
+            first_fix_old_goal_sum = sum(first_fix_old_goal_withoutNA==1, na.rm=TRUE),   
+            # number of dogs that looked at at least one of the objects:
+            first_fix_old_goal_count = sum(!is.na(first_fix_old_goal_withoutNA)))
+```
+
+
+```{r}
+first4s.data.first.fix.agg2<-first4s.data.first.fix %>%
+  group_by(trialtype_agent) %>%
+  summarise(first_fix_old_goal_mean = mean(first_fix_old_goal_withoutNA, na.rm=TRUE), 
+            first_fix_old_goal_sum = sum(first_fix_old_goal_withoutNA==1, na.rm=TRUE), #number of dogs that anticipated the old goal object
+            first_fix_old_side_sum = sum(first_fix_old_goal_withoutNA==0, na.rm=TRUE), #number of dogs that anticipated the old side object
+            first_fix_old_goal_count = sum(!is.na(first_fix_old_goal_withoutNA)))#number of dogs that looked at at least one of the objects
+
+#LL: I think these binomial tests can be removed as they were run on the wrong data (multiple observations from the same subjects), and can be replaced by the McNemar test, right?
+#binomial test for
+#human agent
+binom.test(x = first4s.data.first.fix.agg2$first_fix_old_goal_sum[1] , first4s.data.first.fix.agg2$first_fix_old_goal_count[1] )
+#and for inanimate agent
+binom.test(x = first4s.data.first.fix.agg2$first_fix_old_goal_sum[2] , first4s.data.first.fix.agg2$first_fix_old_goal_count[2] )
+```
+
+```{r}
+
+AL_plot_NAs_excluded<-ggplot(first4s.data.first.fix.agg, aes(x = trialtype_agent, y = first_fix_old_goal_mean)) +
+  geom_bar(stat="identity") + 
+  facet_grid(agent_first~session_withinagent)+
+  ylim(0,1)+
+  ylab("Prop. dogs fixating the old goal first")+
+  xlab("Agent")+
+  theme(axis.text = element_text(size = 14))+  #axis text size 
+  theme(axis.title = element_text(size = 16))
+```
+
+```{r}
+ggsave(filename="graphs/AL_plot_NAs_excluded.png",
+       plot=AL_plot_NAs_excluded,
+       width=8.5,
+       height=5,
+       #scale=0.55,
+       dpi=1200)
+```
+
+## intercept only model (to test whether the dogs have a preference for the new goal in the human condition) LL: why in the human condition? The factor agent_type is not in the model
+## why is agent_first centered and not just agent first?
+
+```{r}
+mm1_first_fix_intercept_only=glmer(first_fix_old_goal_withoutNA ~ +z.session+agent_first.c +
+            (1|subject),
+             data=first4s.data.first.fix, family=binomial, 
+            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+summary(mm1_first_fix_intercept_only)
+```
+
+## latency of anticipatory looks by IA
+Use latency of anticipatory looks to old goal and old site as response variable and we include IA and Agent and their interaction as predictors. 
+
+```{r}
+first4s.data.latency.first.fix <- first4s.data %>%
+  filter(condition != "fam") %>% #keep only test trials
+  filter(grepl("AL", IA_LABEL)) %>% #keep only AL AoIs (smaller)
+  select(
+    subject,
+    session_number,
+    IA_fam_object ,
+    condition,
+    trial_type,
+    trialtype_agent,
+    agent_target_side_first,
+    IA_FIRST_FIXATION_TIME,
+    attention_getter_duration
+  ) %>%
+  mutate(IA_FIRST_FIXATION_TIME_corrected = IA_FIRST_FIXATION_TIME - attention_getter_duration)%>%
+  select(-IA_FIRST_FIXATION_TIME, -attention_getter_duration)%>%
+  pivot_wider(names_from = IA_fam_object, values_from = IA_FIRST_FIXATION_TIME_corrected)  %>%
+      separate(
+        agent_target_side_first,
+        into = c("agent_first", "object_first", "side_first"),
+        #shown to the dog in the first session
+        sep = "_"
+      ) %>%
+      mutate(
+        session_number = as.numeric(session_number),
+        session_withinagent = as.numeric(ifelse(
+          session_number >= 3, session_number - 2, session_number
+        ))
+      )
+
+#numbers of trials in which the dogs looked at least at one of the two areas of interest (old goal or old side)
+first4s.data.latency.first.fix %>%
+  group_by(trialtype_agent, session_withinagent) %>%
+  summarise(
+    old_side_count = sum(!is.na(new_goal_old_side)),
+    old_goal_count = sum(!is.na(old_goal_new_side)),
+    both_count = sum(!is.na(new_goal_old_side) &
+                       !is.na(old_goal_new_side)),
+    either_count = sum(!is.na(new_goal_old_side) |
+                         !is.na(old_goal_new_side))
+  )
+```
+```{r}
+first4s.data.latency.first.fix.long <- first4s.data.latency.first.fix %>%
+  pivot_longer(cols = c(old_goal_new_side, new_goal_old_side), names_to = "IA", values_to = "latency") %>%
+  filter(!is.na(latency))
+
+table(first4s.data.latency.first.fix.long$subject, first4s.data.latency.first.fix.long$trialtype_agent)
+table(first4s.data.latency.first.fix.long$subject, first4s.data.latency.first.fix.long$IA)
+```
+
+
+```{r}
+xx.fe.re=fe.re.tab(fe.model="latency ~ IA * trialtype_agent",
+re="(1|subject)", data=first4s.data.latency.first.fix.long)
+xx.fe.re$summary
+```
+
+fit model (testing whether the latency to look at both AOIs is modulated by the interaction between AOI and agent)
+```{r}
+
+mm1.latency<-lme4::lmer(latency ~ IA * trialtype_agent +
+            (1|subject), data=first4s.data.latency.first.fix.long, REML=FALSE)
+
+```
+
+
+```{r}
+diagnostics.plot(mm1.latency, size.fac=2)
+
+ranef.diagn.plot(mm1.latency)
+```
+collinearity for a model lacking the interaction
+```{r}
+library(car)
+xx<-lm(latency ~ IA + trialtype_agent,
+             data=first4s.data.latency.first.fix.long, REML=FALSE)
+vif(xx)
+```
+
+
+Individual fixed effects
+```{r}
+summary(mm1.latency)
+#drop1(mm1.latency, test = "Chisq") can be deleted?
+library(lmerTest)
+
+mm1.latency.reml<-lmerTest::lmer(latency ~ IA * trialtype_agent +
+            (1|subject), data=first4s.data.latency.first.fix.long, REML=TRUE)
+summary(mm1.latency.reml)
+#in the inanimate condition, dogs' latency to look at the old side is lower than in the human condition
+
+```
+```{r}
+first4s.data.latency.first.fix.long.agg<- first4s.data.latency.first.fix.long %>%
+  group_by(trialtype_agent, IA, subject)%>%
+  summarise(mean_latency = mean(latency))
+library(wesanderson)
+library(ggbeeswarm)
+library(ggsignif)
+
+latency_AL_AOIs_plot<-ggplot(first4s.data.latency.first.fix.long.agg, aes(x = trialtype_agent, y = mean_latency, fill = IA)) +
+  geom_boxplot(position = position_dodge(0.8), alpha=0.8, outlier.colour = "white") +
+  #scale_fill_viridis(discrete = TRUE,  option = "viridis", begin=0.25, labels= c("old side","old goal"))+
+  #scale_fill_manual(values=wes_palette("IsleofDogs1"), labels= c("old side","old goal"))+
+  scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("old side","old goal"))+
+  #scale_fill_manual(values=wes_palette("FantasticFox1")[c(3,4)], labels= c("old side","old goal"))+
+  #scale_fill_manual(values=wes_palette("Royal1")[c(2,1)], labels= c("old side","old goal"))+
+  #geom_quasirandom(method = "pseudorandom", width=0.2, position = position_dodge(0.8))+
+  geom_jitter(position = position_dodge(0.8), alpha=.5, size=2)+
+  #scale_fill_manual(values=c("dodgerblue", "darkorange"), labels= c("old side","old goal"))+
+  ylim(0,4000)+
+  ylab("Mean latency to first fix.")+
+  xlab("Agent")+
+  #geom_text(x=2, y=3200, label="*", size=6, col="black")+
+  geom_signif(xmin=0.8, xmax=1.8, annotations="*", #LMM, test of fixed effect of agent (involved in interaction)
+              y_position = 3600, tip_length = 0.01)+
+  geom_signif(xmin=1.8, xmax=2.2, annotations="*", #LMM relevelled so that inanimate is the reference category, test of fixed effect of AoI (involved in interaction)
+              y_position = 3900, tip_length = 0.01)+
+  theme_bw()
+latency_AL_AOIs_plot
+```
+```{r}
+ggsave(filename="graphs/latency_AL_AOIs.png",
+  plot = latency_AL_AOIs_plot,
+  width=8.5,
+  height=5,
+  scale=0.55,
+  dpi=1200)
+```
+#model relevelled so that old goal is the new reference category
+```{r}
+first4s.data.latency.first.fix.long$IA_rel = relevel(as.factor(first4s.data.latency.first.fix.long$IA), ref = "old_goal_new_side")
+
+levels(first4s.data.latency.first.fix.long$IA_rel)
+
+mm1.latency.reml_rel<-lmerTest::lmer(latency ~ IA_rel * trialtype_agent +
+            (1|subject), data=first4s.data.latency.first.fix.long, REML=TRUE)
+summary(mm1.latency.reml_rel)
+```
+#model relevelled so that agent inanimate is the reference category
+```{r}
+first4s.data.latency.first.fix.long$trialtype_agent_rel = relevel(as.factor(first4s.data.latency.first.fix.long$trialtype_agent), ref = "inanimate")
+
+levels(first4s.data.latency.first.fix.long$trialtype_agent_rel)
+
+mm1.latency.reml_rel2<-lmerTest::lmer(latency ~ IA * trialtype_agent_rel +
+            (1|subject), data=first4s.data.latency.first.fix.long, REML=TRUE)
+summary(mm1.latency.reml_rel2)
+#In the inanimate condition, dogs' latency to look at the old goal is larger than to look at the old side
+```
+model stability: latency 
+
+```{r}
+source("functions/glmm_stability.r")
+full.stab.mm1.latency=glmm.model.stab(model.res=mm1.latency, contr=NULL,
+para=F, data=NULL)
+
+table(full.stab.mm1.latency$detailed$lme4.warnings)
+table(full.stab.mm1.latency$detailed$opt.warnings)#no warnings
+
+#table with model stability
+round(full.stab.mm1.latency$summary[, -1], 3)
+
+#plotting stability
+is.re.latency=grepl(x=rownames(full.stab.mm1.latency$summary), pattern="@")
+png("graphs/mm1_latency_to_first_fix_first4s_stability_plot.png")
+m.stab.plot(full.stab.mm1.latency$summary[!is.re.latency, -1])#fixed effects
+dev.off()
+m.stab.plot(full.stab.mm1.latency$summary[is.re.latency, -1])#random effect
+```
+confidence intervals: latency
+```{r}
+source("functions/boot_glmm.r")
+boot.full.mm1.latency=boot.glmm.pred(model.res=mm1.latency, excl.warnings=F,
+nboots=1000, para=T, n.cores=3, resol=1000, level=0.95)
+round(boot.full.mm1.latency$ci.estimates, 3)
+#visualize cis
+m.stab.plot(boot.full.mm1.latency$ci.estimates)
+```
+###Output table: latency
+```{r}
+model_table_latency_to_first_fix<- bind_cols(as.data.frame(summary(mm1.latency)$coefficients),
+                            boot.full.mm1.latency$ci.estimates[1:4,],
+                            summary(mm1.latency.reml)$coefficients,
+                            full.stab.mm1.latency$summary[1:4, -1])%>% 
+  select(Estimate=`Estimate...1`, SE = `Std. Error...2`, LowerCI = X2.5., UpperCI = X97.5.,t=`t value...10`, Df=`df`, p=`Pr(>|t|)`, `min`, `max`) %>%
+  mutate(across(.cols = c(p), ~ format(round(.x, 3), nsmall=3))) %>% 
+  mutate(across(.cols = c(Estimate:Df, min, max), ~ format(round(.x, 2), nsmall=2))) %>% 
+# mutate(across(Chi2:p_LRT, ~replace_na(.x, "")))%>%
+  mutate(p=replace(p, p==0.000, "<0.001"))
+
+write.csv(model_table_latency_to_first_fix, file = "saves/mm1_latency_first_fix_IPfirst4s.csv")
+```
+
+
+## Proportion dwell time
+```{r}
+
+old_goal_object_data <- first4s.data %>%
+  select(    subject,
+    session_number,
+    IA_fam_object ,
+    condition,
+    trial_type,
+    trialtype_agent, 
+    ia_object) %>%
+  filter(IA_fam_object == "old_goal_new_side")%>%
+  select(-IA_fam_object)%>%
+  rename(old_goal_object = ia_object)
+
+
+first4s.dwell.time <- first4s.data %>%
+  filter(condition != "fam") %>% #keep only test trials
+  filter(grepl("AL", IA_LABEL)) %>% #keep only AL AoIs (smaller)
+  select(
+    subject,
+    session_number,
+    IA_fam_object ,
+    condition,
+    trial_type,
+    trialtype_agent,
+    agent_target_side_first,
+    IA_DWELL_TIME
+  ) %>%
+  pivot_wider(names_from = IA_fam_object, values_from = IA_DWELL_TIME)  %>%
+      separate(
+        agent_target_side_first,
+        into = c("agent_first", "object_first", "side_first"),
+        #shown to the dog in the first session
+        sep = "_"
+      ) %>%
+      mutate(
+        session_number = as.numeric(session_number),
+        session_withinagent = as.numeric(ifelse(
+          session_number >= 3, session_number - 2, session_number
+        ))
+      ) %>%
+  mutate(prop_time_old_goal = old_goal_new_side / (old_goal_new_side + new_goal_old_side))%>%
+  full_join(old_goal_object_data)
+```
+
+### beta model
+```{r}
+
+first4s.dwell.time$z.session_within<-as.vector(scale(first4s.dwell.time$session_withinagent, center = TRUE, scale=TRUE))
+first4s.dwell.time$trialtype_agent<- as.factor(first4s.dwell.time$trialtype_agent)
+first4s.dwell.time$trialtype_agent.c=as.vector(scale(as.numeric(first4s.dwell.time$trialtype_agent==levels(as.factor(first4s.dwell.time$trialtype_agent))[2]), center=TRUE, scale= FALSE))
+
+
+
+first4s.dwell.time$prop_time_old_goal.scaled <- (first4s.dwell.time$prop_time_old_goal*(length(first4s.dwell.time$prop_time_old_goal) - 1) + 0.5)/length(first4s.dwell.time$prop_time_old_goal)#transform DV to exclude 0s and 1s
+
+table(first4s.dwell.time$subject,first4s.dwell.time$prop_time_old_goal.scaled) # 5 dogs never looked at the objects during the first 4 seconds
+```
+
+
+```{r}
+library(glmmTMB)
+mm1.beta<-glmmTMB(prop_time_old_goal.scaled~trialtype_agent+z.session_within+agent_first+ old_goal_object + 
+         #   (1+trialtype_agent.c+z.session_within+old_goal_object|subject),
+            (1|subject)+
+            (0+trialtype_agent.c|subject)+
+            (0+z.session_within|subject),
+              #(0+old_goal_object|subject),#pruned due to warning message
+            family=beta_family, data=first4s.dwell.time,  control=glmmTMBControl(optCtrl=list(iter.max=100000000, eval.max=100000000)))
+
+overdisp.test(mm1.beta)
+
+```
+```{r}
+drop1_mm1.beta<-drop1(mm1.beta, test="Chisq")%>%filter(Df!="")%>%add_row(Df = rep(NA,1),  .before = 1)
+drop1_mm1.beta
+```
+
+```{r}
+summary(mm1.beta)
+```
+
+model stability
+```{r}
+
+mm1.beta.stab=glmmTMB.stab(model.res=mm1.beta, para=F, data=first4s.dwell.time)
+
+mm1.beta.stab$summary
+
+m.stab.plot(round(mm1.beta.stab$summary[1:5, -1], 3))
+#is.re=grepl(x=rownames(mm1.beta.stab$summary), pattern="@")
+#m.stab.plot(mm1.beta.stab$summary[!is.re, -1])
+```
+
+
+
+```{r}
+library(car)
+xx=lm(prop_time_old_goal.scaled~trialtype_agent+z.session_within+agent_first+ old_goal_object, data=first4s.dwell.time)
+vif(xx)
+```
+
+
+```{r}
+mm1.beta.for.ci<-glmmTMB(prop_time_old_goal.scaled~trialtype_agent+z.session_within+agent_first+ old_goal_object + 
+         #   (1+trialtype_agent.c+z.session_within+old_goal_object|subject),
+            (1|subject)+
+            (0+trialtype_agent.c|subject)+
+            (0+z.session_within|subject),
+              #(0+old_goal_object|subject),#pruned due to warning message
+            family=beta_family, data=first4s.dwell.time%>%filter(!is.na(prop_time_old_goal.scaled)),  control=glmmTMBControl(optCtrl=list(iter.max=100000000, eval.max=100000000)))
+
+boot.mm1.beta<-boot.glmmtmb(mm1.beta.for.ci, data=as.data.frame(first4s.dwell.time%>%filter(!is.na(prop_time_old_goal.scaled))),
+nboots=1000, para=T, n.cores="all-1", resol=100, level=0.95 )
+
+boot.mm1.beta$ci.estimates$fe
+
+```
+
+
+
+### output table
+
+```{r}
+model_table_prop_dwell_time_first4s<- bind_cols(as.data.frame(summary(mm1.beta)$coefficients$cond),
+                             boot.mm1.beta$ci.estimates$fe[1:5,],
+                             drop1_mm1.beta,
+                             mm1.beta.stab$summary[1:5, -1]) %>%
+                             select(Estimate, SE = `Std. Error`, LowerCI = X2.5., UpperCI = X97.5.,  Chi2 = LRT, df = Df, p_LRT = `Pr(>Chi)`, `min`,`max`) %>%
+  mutate(across(.cols = c(p_LRT), ~ format(round(.x, 3), nsmall=3))) %>% 
+  mutate(across(.cols = c(Estimate:UpperCI, Chi2, min, max), ~ format(round(.x, 2), nsmall=2))) %>% 
+#  mutate(across(Chi2:p_LRT, ~replace_na(.x, "")))%>%
+mutate(p_LRT=replace(p_LRT, p_LRT==0.000, "<0.001"))#%>%
+#mutate(p=replace(p, p==0.000, "<0.001"))
+
+write.csv(model_table_prop_dwell_time_first4s, file = "saves/mm1_beta_prop_dwell_time_old_goal_IPfirst4s.csv")
+```
+
+
+
+
+
+
+## old stuff
+######################################################### copied from different projects ###########
+
+
+
+```{r}
+first4s.data.wider <- first4s.data %>%
+  select(
+    subject,
+    session.num,
+    condition_trial,
+    Trial_Index_,
+    IA_LABEL,
+    IA_fam_object,
+    condition,
+    trial_type,
+    agent_target_side_first,
+    condition_first,
+    video_file,
+    DATA_FILE,
+    IA_AREA,
+    IA_DWELL_TIME,
+    IA_FIXATION_COUNT
+  ) %>% 
+  filter(condition != "fam") %>% #keep only test trials
+  filter(grepl("AL", IA_LABEL)) %>% #keep only AL AoIs (smaller)
+  pivot_wider(names_from = IA_fam_object, values_from = )%>% #IA_DWELL_TIME for dwell times
+  # mutate(object_congruent_dwell_time=as.numeric(ifelse(target_location=="up",IA_lower_object, ifelse(target_location=="down",IA_upper_object, "") )), object_incongruent_dwell_time=as.numeric(ifelse(target_location=="up",IA_upper_object, ifelse(target_location=="down",IA_lower_object, "") )))%>%
+  # select(-IA_lower_object, -IA_upper_object, -IA_agent)%>%
+  # pivot_longer(cols=c(object_congruent_dwell_time, object_incongruent_dwell_time), names_to = "object_congruent", values_to = "dwell_time")
+
+
+#checks:
+view(dfSummary(end.ip.data))
+
+table(end.ip.data$trial_within_block, end.ip.data$subject)
+table(end.ip.data$condition, end.ip.data$subject)
+table(end.ip.data$session.num, end.ip.data$subject)
+table(end.ip.data$condition, end.ip.data$TRIAL_TOTAL_VISITED_IA_COUNT)
+
+```
+
+
+```{r}
+
+test.IP.end.data <- end.ip.data %>%
+  group_by(subject, condition, target_location, IA_LABEL)%>%
+  summarise(mean_dwell=mean(IA_DWELL_TIME))
+
+
+
+ggplot(data = test.IP.end.data, aes(x=target_location, y=mean_dwell))+
+  geom_boxplot(alpha=0.5)+#, outlier.colour = "white")+
+  #geom_point(aes(x=first_target_loc, y=IA_DWELL_TIME, group=IA_LABEL),position_dodge(), alpha=0.5)+
+  facet_grid(condition~IA_LABEL)+
+  ylab("Dwell time")+xlab("Condition")+
+  #ylim(0,3000)+
+  theme_bw()#+
+  #stat_compare_means(paired = TRUE, method = "t.test", label.y = 1500 )
+
+```
+
+```{r}
+
+test.IP.end.data.object.congruent <- end.ip.data.wider %>%
+  group_by(subject, condition, object_congruent)%>%
+  summarise(mean_dwell=mean(dwell_time))
+
+
+
+ggplot(data = test.IP.end.data.object.congruent, aes(x=object_congruent, y=mean_dwell))+
+  geom_boxplot(alpha=0.5)+#, outlier.colour = "white")+
+  geom_point(alpha=0.3)+
+  geom_line(aes(group=subject), alpha=0.3)+
+  facet_wrap(~condition)+
+  ylab("Dwell time")+xlab("Object congruency")+
+  #ylim(0,3000)+
+  theme_bw()+
+  stat_compare_means(paired = TRUE, method = "t.test", label.y = 1500 )
+
+```
+
+
+```{r}
+test.IP.end.data.object.congruent.hand<-test.IP.end.data.object.congruent%>%
+  filter(condition=="hand")
+
+t.test(test.IP.end.data.object.congruent.hand$mean_dwell[test.IP.end.data.object.congruent.hand$object_congruent=="object_congruent_dwell_time"], test.IP.end.data.object.congruent.hand$mean_dwell[test.IP.end.data.object.congruent.hand$object_congruent=="object_incongruent_dwell_time"], paired=TRUE)
+```
+
+
+
+
+End IP (longer)
+
+```{r}
+end.ip.long.orig.data <- read_delim("data/dog_woodward_paradigm_IA_report_video_IP_end_long.txt", na=".", delim="\t")
+
+demo.data <- read_csv("data/Woodward_Kano_ counterbalancing.csv")%>%
+  mutate(EDF1=fct_recode(as.factor(EDF1), "Georgia_1"="Georgia1"))%>%
+  separate(EDF1, c("subject", "num"), sep="_")
+
+
+end.ip.long.data <- end.ip.long.orig.data %>%
+  select(Session_Name_, IP_LABEL, IA_LABEL,IA_ID, Trial_Index_, condition, target, target_location, session, trial_within_block, video_file,  video_latency, DATA_FILE,  IA_AREA, IA_AVERAGE_FIX_PUPIL_SIZE,  IA_DWELL_TIME, "IA_DWELL_TIME_%", IA_FIRST_FIXATION_TIME, IA_FIXATION_COUNT, IA_MAX_FIX_PUPIL_SIZE, INTEREST_AREA_FIXATION_SEQUENCE, TRIAL_DWELL_TIME, TRIAL_FIXATION_COUNT, TRIAL_IA_COUNT, TRIAL_TOTAL_VISITED_IA_COUNT )%>%
+ #  filter(!(DATA_FILE=="Ace_2.edf" & Trial_Index_!=4))%>%
+#  mutate(trial=ifelse(DATA_FILE=="Ace_2.edf" & Trial_Index_==4, 5, Trial_Index_))%>% #recoding of trial number to account for a dog that did not complete his first session, session was repeated with this dog
+  mutate(Session_Name_=fct_recode(Session_Name_, Georgia_1="Georgia1",Georgia_2="Georgia2", Georgia_3="Georgia3",Georgia_4="Georgia4" ))%>%
+  separate(Session_Name_, c("subject", "session.num"), sep = "_") %>%
+  mutate(condition_trial=paste(condition, "_", trial_within_block))%>%
+  full_join(demo.data)
+  
+
+
+end.ip.long.data.wider<-end.ip.long.data%>%
+  select(subject, session.num,condition_trial, IP_LABEL, IA_LABEL, condition, target, target_location, session, trial_within_block, video_file,  video_latency, DATA_FILE,  IA_DWELL_TIME)%>%
+  pivot_wider(names_from = IA_LABEL, values_from=IA_DWELL_TIME)%>%
+  mutate(object_congruent_dwell_time=as.numeric(ifelse(target_location=="up",IA_lower_object, ifelse(target_location=="down",IA_upper_object, "") )), object_incongruent_dwell_time=as.numeric(ifelse(target_location=="up",IA_upper_object, ifelse(target_location=="down",IA_lower_object, "") )))%>%
+  select(-IA_lower_object, -IA_upper_object, -IA_agent)%>%
+  pivot_longer(cols=c(object_congruent_dwell_time, object_incongruent_dwell_time), names_to = "object_congruent", values_to = "dwell_time")
+
+
+#checks:
+view(dfSummary(end.ip.data))
+
+table(end.ip.data$trial_within_block, end.ip.data$subject)
+table(end.ip.data$condition, end.ip.data$subject)
+table(end.ip.data$session.num, end.ip.data$subject)
+table(end.ip.data$condition, end.ip.data$TRIAL_TOTAL_VISITED_IA_COUNT)
+
+```
+
+
+```{r}
+
+test.IP.end.long.data <- end.ip.long.data %>%
+  group_by(subject, condition, target_location, IA_LABEL)%>%
+  summarise(mean_dwell=mean(IA_DWELL_TIME))
+
+
+
+ggplot(data = test.IP.end.long.data, aes(x=target_location, y=mean_dwell))+
+  geom_boxplot(alpha=0.5)+#, outlier.colour = "white")+
+  #geom_point(aes(x=first_target_loc, y=IA_DWELL_TIME, group=IA_LABEL),position_dodge(), alpha=0.5)+
+  facet_grid(condition~IA_LABEL)+
+  ylab("Dwell time")+xlab("Condition")+
+  #ylim(0,3000)+
+  theme_bw()#+
+  #stat_compare_means(paired = TRUE, method = "t.test", label.y = 1500 )
+
+```
+
+```{r}
+
+test.IP.end.long.data.object.congruent <- end.ip.long.data.wider %>%
+  group_by(subject, condition, object_congruent)%>%
+  summarise(mean_dwell=mean(dwell_time))
+
+
+
+ggplot(data = test.IP.end.long.data.object.congruent, aes(x=object_congruent, y=mean_dwell))+
+  geom_boxplot(alpha=0.5)+#, outlier.colour = "white")+
+  geom_point(alpha=0.3)+
+  geom_line(aes(group=subject), alpha=0.3)+
+  facet_wrap(~condition)+
+  ylab("Dwell time")+xlab("Object congruency")+
+  #ylim(0,3000)+
+  theme_bw()+
+  stat_compare_means(paired = TRUE, method = "t.test", label.y = 1500 )
+
+```
+
+Trial report
+
+```{r}
+
+trialreport.end.ip.orig.data <- read_delim("data/dog_woodward_paradigm_trial_report_video_IP_end.txt", na=".", delim="\t")
+
+
+
+```
+
+
+
+
+
+
+
+-repear IA analysis with larger areas of interest
+- setup a model for the dwell time (proportion of correct AOI)
+- first look
+- pupil size
+
+
+
+
+
+
+
+############################################################
+
+```{r}
+#first test trial
+test.IP.end.IA.endpos.trial1 <- end.ip.data %>%
+  filter(condition!="hab", IA_LABEL=="IA_end_position", trial==4)
+
+
+t.test(test.IP.end.IA.endpos.trial1$IA_DWELL_TIME[test.IP.end.IA.endpos.trial1$condition=="exp"], test.IP.end.IA.endpos.trial1$IA_DWELL_TIME[test.IP.end.IA.endpos.trial1$condition=="con"], paired=TRUE)
+
+#second test trial
+test.IP.end.IA.endpos.trial2 <- end.ip.data %>%
+  filter(condition!="hab", IA_LABEL=="IA_end_position", trial==5)
+
+
+t.test(test.IP.end.IA.endpos.trial2$IA_DWELL_TIME[test.IP.end.IA.endpos.trial1$condition=="exp"], test.IP.end.IA.endpos.trial2$IA_DWELL_TIME[test.IP.end.IA.endpos.trial1$condition=="con"], paired=TRUE)
+
+
+```
+
+
+Onscreen Dwell time (while videos is playing)
+
+```{r}
+video_playing_data<-read.delim("data/ET_VoE_occlusion2screens_IA_report_whole_screen_video_playing_IP.txt",na=".", sep = "\t")%>%
+  select(Session_Name_, IP_LABEL, IA_LABEL,IA_ID, Trial_Index_, condition, phase, session,  video_file, video_id, video_latency, DATA_FILE,  IA_AREA, IA_AVERAGE_FIX_PUPIL_SIZE,  IA_DWELL_TIME, "IA_DWELL_TIME", IA_FIXATION_COUNT, IA_MAX_FIX_PUPIL_SIZE, INTEREST_AREA_FIXATION_SEQUENCE, TRIAL_DWELL_TIME, TRIAL_FIXATION_COUNT, TRIAL_IA_COUNT, TRIAL_TOTAL_VISITED_IA_COUNT )%>%
+   filter(!(DATA_FILE=="Ace_2.edf" & Trial_Index_!=4))%>%
+  mutate(trial=ifelse(DATA_FILE=="Ace_2.edf" & Trial_Index_==4, 5, Trial_Index_))%>% #recoding of trial number to account for a dog that did not complete his first session, session was repeated with this dog
+  mutate(Session_Name_=fct_recode(Session_Name_, Georgia_1="Georgia1",Georgia_2="Georgia2", Cheynna_1="Cheynna1", Cheynna_2="Cheynna2" ))%>%
+  separate(Session_Name_, c("subject", "session.num"), sep = "_") %>%
+  mutate(condition_trial=paste(condition, "_", trial))%>%
+  full_join(demo.data)
+ # rename(trial="Trial_Index_")
+  
+
+#checks:
+view(dfSummary(video_playing_data))
+
+
+on_screen_data<-video_playing_data%>%
+  filter(IA_LABEL=="screen_aoi")%>%
+  mutate(prop_looking=IA_DWELL_TIME/5000)
+
+
+on_screen_data%>%group_by(condition)%>%
+  summarise(mean=mean(prop_looking, na.rm = TRUE), median=median(prop_looking, na.rm = TRUE), se=sd(prop_looking, na.rm = TRUE)/sqrt(length(prop_looking)), min=min(prop_looking, na.rm = TRUE), max=max(prop_looking, na.rm = TRUE))
+
+```
+
+onscreen dwell-time: comparison between first and last familiarisation trial.
+```{r}
+library(broom)
+on_screen_data%>%filter(phase=="hab1" | phase=="hab3")%>%
+  group_by(subject, phase)%>%
+  summarise(mean=mean(prop_looking, na.rm=TRUE))%>%
+  ungroup()%>%
+  summarise(ttest = list(t.test(mean ~ phase, paired=TRUE)))%>%
+  mutate(ttest = map(ttest, tidy)) %>%
+  unnest()
+```
+
+
+onscreen dwell-time: comparison between test trials
+* first test trial
+```{r}
+on_screen_data%>%filter(condition!="hab", trial==4)%>%
+  group_by(subject, condition)%>%
+  summarise(mean=mean(prop_looking, na.rm=TRUE))%>%
+  ungroup()%>%
+  summarise(ttest = list(t.test(mean ~ condition, paired=TRUE)))%>%
+  mutate(ttest = map(ttest, tidy)) %>%
+  unnest()
+```
+
+* second test trial
+```{r}
+on_screen_data%>%filter(condition!="hab", trial==5)%>%
+  group_by(subject, condition)%>%
+  summarise(mean=mean(prop_looking, na.rm=TRUE))%>%
+  ungroup()%>%
+  summarise(ttest = list(t.test(mean ~ condition, paired=TRUE)))%>%
+  mutate(ttest = map(ttest, tidy)) %>%
+  unnest()
+```
+
+Plot onscreen dwell time in test trials
+```{r}
+xx<-on_screen_data%>%filter(condition!="hab")%>%
+  group_by(subject, condition)%>%
+  summarise(mean=mean(prop_looking))%>%
+  ungroup()
+
+ggplot(data=xx, aes(x=condition, y=mean))+
+  geom_boxplot()
+```

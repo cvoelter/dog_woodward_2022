@@ -43,7 +43,7 @@ sample.data<-read_parquet("data/Woodward2022_Sample_Report.parquet") %>%
 first trial
 ```{r}
 sample.data.ft <- sample.data %>%
-  filter(time < 11000) %>%
+  filter(time < 11000) %>% #keep only the first trial of the familiarisation
    mutate(
     subject = fct_recode(
       subject,
