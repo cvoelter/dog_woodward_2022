@@ -158,7 +158,7 @@ table(as.factor(first4s.data$DATA_FILE),
 first4s.data.first.fix <- first4s.data %>%
   filter(condition != "fam") %>% #keep only test trials
   filter(grepl("AL", IA_LABEL)) %>% #keep only AL AoIs (smaller)
-  select(subject, session_number, IA_fam_object , condition, ,trial_type, trialtype_agent, agent_target_side_first, IA_FIRST_FIXATION_TIME)%>%
+  select(subject, session_number, IA_fam_object , condition, trial_type, trialtype_agent, agent_target_side_first, IA_FIRST_FIXATION_TIME)%>%
   pivot_wider(names_from = IA_fam_object, values_from=IA_FIRST_FIXATION_TIME)%>%
   mutate(old_goal_new_side = replace_na(old_goal_new_side, 99999999), new_goal_old_side = replace_na(new_goal_old_side, 99999999))%>%
   mutate(first_fix_old_goal=as.numeric(ifelse(old_goal_new_side<new_goal_old_side, 1, 0)),
@@ -554,11 +554,11 @@ ggsave(filename="graphs/AL_plot_NAs_excluded.png",
        dpi=1200)
 ```
 
-## intercept only model (to test whether the dogs have a preference for the new goal in the human condition) LL: why in the human condition? The factor agent_type is not in the model
-## why is agent_first centered and not just agent first?
+## intercept only model (to test whether the dogs have a preference for the new goal in either condition) 
+
 
 ```{r}
-mm1_first_fix_intercept_only=glmer(first_fix_old_goal_withoutNA ~ +z.session+agent_first.c +
+mm1_first_fix_intercept_only=glmer(first_fix_old_goal_withoutNA ~ 1+z.session+agent_first.c +
             (1|subject),
              data=first4s.data.first.fix, family=binomial, 
             control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))

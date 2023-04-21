@@ -24,9 +24,14 @@ source("./functions/extract_ranef_gmmTMB.r")
 load("workspaces/fam.RData")
 ```
 
-
+Note: use sample report to find first fixation to the objects after the agent was fixated and the agent started moving.
 ```{r}
 save.image("workspaces/fam.RData")
+```
+
+```{r}
+#time when agent makes contact with target object
+contact_time <- 6460
 ```
 
 
@@ -146,10 +151,17 @@ fam.data <-
       IA_LABEL
     )
   )) %>% 
-  mutate(attention_getter_duration = IP_START_TIME - TRIAL_START_TIME)
+      separate(
+      agent_target_side_first,
+      into = c("agent_first", "object_first", "side_first"),
+      #shown to the dog in the first session
+      sep = "_"
+    )%>%
+  mutate(attention_getter_duration = IP_START_TIME - TRIAL_START_TIME)%>%
+  mutate(IA_FIRST_FIXATION_TIME_corrected = IA_FIRST_FIXATION_TIME - attention_getter_duration) #subtract attention getter duration to get first fixation latency from the onset of the interest period
 
 levels(as.factor(fam.data$IA_LABEL))
-
+min(fam.data$IA_FIRST_FIXATION_TIME_corrected, na.rm=TRUE)
 
   # mutate(
   #   IA_fam_object = ifelse(
@@ -202,7 +214,6 @@ table(as.factor(fam.data$DATA_FILE),
 ```
 
 ```{r}
-
 # mutate(IA_fam_object = ifelse(
 #   ia_object != "" & ia_object == trialtype_object,
 #   "target",
@@ -215,8 +226,9 @@ fam.data.first.fix <- fam.data %>%
   select(subject,
          session_number,
          trial_type,
+         agent_first,
          IA_LABEL,
-         IA_FIRST_FIXATION_TIME) %>%
+         IA_FIRST_FIXATION_TIME_corrected) %>%
   mutate(trial_type2 = trial_type) %>%
   separate(
     trial_type2,
@@ -245,12 +257,10 @@ fam.data.first.fix <- fam.data %>%
     IA_content == "human"|
       IA_content == "inanimate",
     "agent",
-    IA_content
+    as.character(IA_content)
     
   ))) %>% 
-#LL: for some reason the levels of IA content are replaced by numbers (ball->1, elephant->2)
-mutate(IA_content2 = fct_recode(IA_content2, "ball"="1", "elephant"="2")) %>% 
-  mutate(IA_content3 = ifelse(IA_content2 == "agent", "agent",
+  mutate(IA_content3 = ifelse(IA_content2 == "agent", as.character(IA_content2),
                               ifelse((IA_content2 == "elephant" |
                                  IA_content2 == "ball") & IA_content2 == target_object,
                               "target", "distractor")))
@@ -267,51 +277,149 @@ mutate(IA_content2 = fct_recode(IA_content2, "ball"="1", "elephant"="2")) %>%
 
 
 fam.data.first.fix.wider <- fam.data.first.fix %>% 
-  filter(!is.na(IA_FIRST_FIXATION_TIME)) %>% 
-  pivot_wider(names_from = IA_content3, values_from = IA_FIRST_FIXATION_TIME) %>% 
-  # group_by(subject, session_number) %>% 
-  # filter(target>agent|distractor>agent) #does not work, excludes all data
-  
-############from AL during test script:##########  
-  mutate(
-    old_goal_new_side = replace_na(old_goal_new_side, 99999999),
-    new_goal_old_side = replace_na(new_goal_old_side, 99999999)
-  ) %>%
-  mutate(
-    first_fix_old_goal = as.numeric(ifelse(
-      old_goal_new_side < new_goal_old_side, 1, 0
-    )),
-    first_fix_old_goal_withoutNA = as.numeric(ifelse(
-      old_goal_new_side == new_goal_old_side,
-      NA,
-      ifelse(old_goal_new_side <
-               new_goal_old_side, 1, 0)
-    )),
-    first_fix_old_side = as.numeric(ifelse(
-      old_goal_new_side > new_goal_old_side, 1, 0
-    )),
-    first_fix_old_side_withoutNA = as.numeric(ifelse(
-      old_goal_new_side == new_goal_old_side,
-      NA,
-      ifelse(old_goal_new_side >
-               new_goal_old_side, 1, 0)
-    ))
-  ) %>%
-  separate(
-    agent_target_side_first,
-    into = c("agent_first", "object_first", "side_first"),
-    #shown to the dog in the first session
-    sep = "_"
-  ) %>%
+  filter(!is.na(IA_FIRST_FIXATION_TIME_corrected)) %>%
+  select(-IA_LABEL, -IA_content, -IA_content2)%>%
+  pivot_wider(names_from = IA_content3, values_from = IA_FIRST_FIXATION_TIME_corrected) %>% 
+  mutate(arrival_time_target_object = as.numeric(ifelse(agent < target & target > 1600, target - contact_time, NA)),
+         arrival_time_distractor_object = as.numeric(ifelse(agent < distractor & distractor > 1600, distractor - contact_time, NA)))%>%
   mutate(
     session_number = as.numeric(session_number),
     session_withinagent = as.numeric(ifelse(
       session_number >= 3, session_number - 2, session_number
     ))
   )
+```
+
+```{r}
+fam.data.first.fix.wider.agg<- fam.data.first.fix.wider %>%
+  group_by(subject, agent_shown) %>%
+  summarise(mean_arrival_time_target = mean(arrival_time_target_object, na.rm = TRUE))
+
+ggplot(fam.data.first.fix.wider.agg, aes(x = agent_shown, y = mean_arrival_time_target)) + 
+  geom_boxplot(outlier.color = "white") + 
+  geom_count(alpha = 0.2)+
+  geom_line(aes(group=subject), lty =2, color="grey")+
+  theme_bw()
+```
+
+
+### fit LMM (arrival times)
+
+fit model (testing whether the dogs looked sooner at the target object when the agent was a human than inanimate)
+
+```{r}
+xx.fe.re=fe.re.tab(fe.model="arrival_time_target_object ~ agent_shown + agent_first + z.session_within",
+re="(1|subject)", data=fam.data.first.fix.wider)
+xx.fe.re$summary
+
+fam.data.first.fix.wider.na_excluded<-fam.data.first.fix.wider%>%
+  filter(!is.na(arrival_time_target_object))
+table(fam.data.first.fix.wider.na_excluded$agent_shown, fam.data.first.fix.wider.na_excluded$subject) 
+table(fam.data.first.fix.wider.na_excluded$z.session_within, fam.data.first.fix.wider.na_excluded$subject) 
+```
+```{r}
+fam.data.first.fix.wider$z.session_within <-
+  as.vector(scale(
+    as.numeric(fam.data.first.fix.wider$session_withinagent),
+    center = TRUE,
+    scale = TRUE
+  ))
+```
+
+
+```{r}
+
+mm1.arrival.time<-lme4::lmer(arrival_time_target_object ~ agent_shown + agent_first + z.session_within + 
+            (1|subject), data=fam.data.first.fix.wider, REML=FALSE)
+
+```
+
+
+```{r}
+diagnostics.plot(mm1.arrival.time, size.fac=2)
+
+ranef.diagn.plot(mm1.arrival.time)
+```
+collinearity for a model lacking the interaction
+```{r}
+library(car)
+xx<-lm(arrival_time_target_object ~ agent_shown + agent_first + z.session_within, data=fam.data.first.fix.wider, REML=FALSE)
+vif(xx)
+```
+
+
+Individual fixed effects
+```{r}
+summary(mm1.arrival.time)
+library(lmerTest)
+
+mm1.arrival.time.reml<-lmerTest::lmer(arrival_time_target_object ~ agent_shown + agent_first + z.session_within + 
+            (1|subject), data=fam.data.first.fix.wider, REML=TRUE)
+summary(mm1.arrival.time.reml)
+# no significant effect of agent
+
+```
+
+model stability: latency 
+
+```{r}
+source("functions/glmm_stability.r")
+full.stab.mm1.arrival.time=glmm.model.stab(model.res=mm1.arrival.time, contr=NULL,
+para=F, data=NULL)
+
+table(full.stab.mm1.arrival.time$detailed$lme4.warnings)
+table(full.stab.mm1.arrival.time$detailed$opt.warnings)#no warnings
+
+#table with model stability
+round(full.stab.mm1.arrival.time$summary[, -1], 3)
+
+#plotting stability
+is.re.latency=grepl(x=rownames(full.stab.mm1.arrival.time$summary), pattern="@")
+png("graphs/mm1.arrival.time_fam_stability_plot.png")
+m.stab.plot(full.stab.mm1.arrival.time$summary[!is.re.latency, -1])#fixed effects
+dev.off()
+m.stab.plot(full.stab.mm1.arrival.time$summary[is.re.latency, -1])#random effect
+```
+confidence intervals: latency
+```{r}
+source("functions/boot_glmm.r")
+boot.full.mm1.arrival.time=boot.glmm.pred(model.res=mm1.arrival.time, excl.warnings=F,
+nboots=1000, para=T, n.cores=3, resol=1000, level=0.95)
+round(boot.full.mm1.arrival.time$ci.estimates, 3)
+#visualize cis
+m.stab.plot(boot.full.mm1.arrival.time$ci.estimates)
+```
+###Output table: latency
+```{r}
+model_table_mm1.arrival.time<- bind_cols(as.data.frame(summary(mm1.arrival.time)$coefficients),
+                            boot.full.mm1.arrival.time$ci.estimates[1:4,],
+                            summary(mm1.arrival.time.reml)$coefficients,
+                            full.stab.mm1.arrival.time$summary[1:4, -1])%>% 
+  select(Estimate=`Estimate...1`, SE = `Std. Error...2`, LowerCI = X2.5., UpperCI = X97.5.,t=`t value...10`, Df=`df`, p=`Pr(>|t|)`, `min`, `max`) %>%
+  mutate(across(.cols = c(p), ~ format(round(.x, 3), nsmall=3))) %>% 
+  mutate(across(.cols = c(Estimate:Df, min, max), ~ format(round(.x, 2), nsmall=2))) %>% 
+# mutate(across(Chi2:p_LRT, ~replace_na(.x, "")))%>%
+  mutate(p=replace(p, p==0.000, "<0.001"))
+
+write.csv(model_table_mm1.arrival.time, file = "saves/mm1_arrival_time_fam.csv")
+```
+
+### Arrival time: one sample t-test
+
+```{r}
+fam.data.first.fix.wider.agg2<- fam.data.first.fix.wider %>%
+  group_by(subject) %>%
+  summarise(mean_arrival_time_target = mean(arrival_time_target_object, na.rm = TRUE))
+
+t.test(fam.data.first.fix.wider.agg2$mean_arrival_time_target, mu = 0)
+```
 
 
 
+###################################################
+
+
+```{r}
 # find the first looks to the old goal or old side. If there were first looks to one of the two IAa in both sessions we retained the first session value
 first4s.data.first.fix.long <- fam.data.first.fix %>%
   filter(first_fix_old_goal == 1 | first_fix_old_side == 1) %>%

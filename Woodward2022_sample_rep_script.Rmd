@@ -9,7 +9,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(arrow)
 ```
-
+Idea: find the first fixation to object after first fixation at agent and after agent started moving (at around 1600). Approach: delete sample before the agent was looked at and before agent started moving. 
 ```{r}
 agent_arrival_time <- 6460
 ```
