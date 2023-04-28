@@ -16,7 +16,7 @@ library(exactRankTests)
 library(lme4)
 library(naniar)
 #library(devtools)
-#remotes::install_github("dmirman/gazer")
+remotes::install_github("dmirman/gazer")
 library(gazer)
 library(zoo)
 library(wesanderson)
@@ -35,6 +35,8 @@ packageVersion("colorspace")
 col1 <- 'pink1'
 col2 <- 'black'
 col3 <- 'indianred'
+
+load("pupil_size.RData")
 ```
 
 
@@ -80,6 +82,8 @@ sample.data<-read_parquet("data/Woodward2022_Sample_Report.parquet") %>%
 #data checks
 str(sample.data)
 table(sample.data$subject,sample.data$trial_number)
+table(sample.data$subject,sample.data$num)
+
 table(sample.data$subject,sample.data$condition)
 table(sample.data$subject,sample.data$agent)
 summary(sample.data$time)
@@ -199,7 +203,7 @@ table(sample.data$subject, sample.data$trial_number)
 
 # determine baseline
 exp.data.pupil.base <- sample.data %>%
-  filter(time < baseline.end & time > 0) %>% 
+  filter(time < baseline.end & time > (baseline.end-1000)) %>% 
     group_by(subject, trial_number) %>%
   summarise(median.base.pupil = median(RIGHT_PUPIL_SIZE_no_blinks, na.rm = TRUE))
 
@@ -247,7 +251,7 @@ plot.woodward.pupil.individual<-ggplot(data = exp.data.pupil.processed.downsampl
     geom_vline(aes(xintercept=baseline.end), lty=2, alpha=0.3)+
   geom_point(aes(color = as.factor(condition)), alpha = 0.8, size = 0.5) +
   geom_line(aes(color = as.factor(condition)), alpha = 0.8) +
-  facet_grid(~subject)+
+  facet_grid(agent~subject)+
   xlim(0, 22000) +
     theme_bw()+
     scale_color_manual(values = wes_palette("Zissou1")[c(1, 4)],
@@ -263,7 +267,7 @@ plot.woodward.pupil.individual<-ggplot(data = exp.data.pupil.processed.downsampl
         legend.key.size = unit(0.2, "cm"))
 
 plot.woodward.pupil.individual
-#ggsave(plot.woodward.pupil.individual, filename = "graphs/pupil_processed_baseline_corrected_individual.png", height = 7, width = 12, scale = 0.8)
+ggsave(plot.woodward.pupil.individual, filename = "graphs/pupil_processed_baseline_corrected_individual.png", height = 7, width = 20, scale = 1)
 ```
 # Plot group level data (condition)
 ```{r}
@@ -294,7 +298,8 @@ plot.woodward.pupil.group <- ggplot(data = pupil.group.level, aes(x = bin_low, y
         legend.position = c(0.80, 0.15),  
         legend.text=element_text(size=12),
         axis.text=element_text(size=11),
-        axis.title=element_text(size=12))
+        axis.title=element_text(size=12))+
+  facet_wrap(~agent)
 
 plot.woodward.pupil.group
 
@@ -422,6 +427,7 @@ save.image("C:/Users/lonardol/Desktop/Eye-tracker/Action_understanding_experimen
 
 library(mgcViz)
 gam.check(gamm.full)
+
 
 acf(resid(gamm.full), bty='n', main="ACF residuals model1")
 acf(resid(gamm.full), plot=FALSE)
