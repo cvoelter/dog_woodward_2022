@@ -8,10 +8,22 @@ date: "`r Sys.Date()`"
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(arrow)
+library(lme4)
+
+
+source("./functions/diagnostic_fcns.r")
+source("./functions/glmm_stability.r")
+source("./functions/boot_glmm.r")
+source("./functions/boot_glmm2.r")
+source("./functions/glmmTMB_stability.r")
+source("./functions/boot_glmmTMB.r")
+source("./functions/extract_ranef_gmmTMB.r")
+
 ```
 Idea: find the first fixation to object after first fixation at agent and after agent started moving (at around 1600). Approach: delete sample before the agent was looked at and before agent started moving. 
 ```{r}
-agent_arrival_time <- 6460
+#video frame in which the objects starts moving: 646
+agent_start_time <- 1600
 ```
 
 
@@ -34,6 +46,14 @@ sample.data<-read_parquet("data/Woodward2022_Sample_Report.parquet") %>%
     filter(RECORDING_SESSION_LABEL != "Melody_1", RECORDING_SESSION_LABEL != "Mia_5") %>%
   filter(RECORDING_SESSION_LABEL != "Timo_5", RECORDING_SESSION_LABEL != "Joker_5") %>%
   separate(RECORDING_SESSION_LABEL, c("subject", "num"), sep = "_")%>%
+  mutate(
+    subject = fct_recode(
+      subject,
+      Georgia = "Georgia1",
+      Georgia = "Georgia2",
+      Georgia = "Georgia3",
+      Georgia = "Georgia4"
+    )) %>%
   mutate(condition_trial = paste(condition, "_", Trial_Index_)) %>%
   filter(condition == "fam")%>% #retain familiarisation 
   full_join(demo.data)%>%
@@ -44,15 +64,7 @@ first trial
 ```{r}
 sample.data.ft <- sample.data %>%
   filter(time < 11000) %>% #keep only the first trial of the familiarisation
-   mutate(
-    subject = fct_recode(
-      subject,
-      Georgia = "Georgia1",
-      Georgia = "Georgia2",
-      Georgia = "Georgia3",
-      Georgia = "Georgia4"
-    )) %>%
-  mutate(ref_time = time - agent_arrival_time)%>%
+  #mutate(ref_time = time - agent_arrival_time)%>%
   mutate(overlapping_IA = ifelse(RIGHT_INTEREST_AREAS == "[ 2, 5 ]" | RIGHT_INTEREST_AREAS == "[ 4, 5 ]", "agent_object",
                                  ifelse(RIGHT_INTEREST_AREAS == "[ 2 ]" | RIGHT_INTEREST_AREAS == "[ 4 ]", "object",
                                         ifelse(RIGHT_INTEREST_AREAS == "[ 5 ]", "agent", "")))) %>%
@@ -68,12 +80,47 @@ sample.data.ft <- sample.data %>%
     into = c("trialtype_agent", "trialtype_object", "trialtype_side"),
     sep = "_"
   ) %>%
-  #filter(ia_object == "elephant" | ia_object == "ball") %>%
+  separate(
+        agent_target_side_first,
+        into = c("agent_first", "object_first", "side_first"),
+        #shown to the dog in the first session
+        sep = "_"
+      )%>%
   mutate(
     IA_fam_object = ifelse(ia_object !="" & ia_object == trialtype_object,
       "target",
       ifelse(ia_object !="" & ia_object != trialtype_object,
-        "distractor","")))
+        "distractor","")))%>%
+  mutate(RIGHT_INTEREST_AREA_LABEL = ifelse(               #rename some RIGHT_INTEREST_AREA_LABELS that had the wrong label in the viewing session
+    (subject == "Ace" &
+       grepl("human", RIGHT_INTEREST_AREA_LABEL)) |
+      (subject == "George" &
+         grepl("human", RIGHT_INTEREST_AREA_LABEL)) |
+      (subject == "Georgia" &
+         grepl("human", RIGHT_INTEREST_AREA_LABEL)) |
+      (subject == "Joker" &
+         grepl("human", RIGHT_INTEREST_AREA_LABEL)) |
+      (subject == "Lenny" &
+         grepl("human", RIGHT_INTEREST_AREA_LABEL)) |
+      (subject == "Melody" &
+         grepl("human", RIGHT_INTEREST_AREA_LABEL)) |
+      (subject == "Mia" &
+         grepl("human", RIGHT_INTEREST_AREA_LABEL)),
+    "fam_dyn_human_elephant_left",
+    ifelse(
+      (subject == "Juna" &
+         grepl("human", RIGHT_INTEREST_AREA_LABEL)) |
+        (subject == "Maylo" &
+           grepl("human", RIGHT_INTEREST_AREA_LABEL)) |
+        (subject == "Milo" &
+           grepl("human", RIGHT_INTEREST_AREA_LABEL)) |
+        (subject == "Timo" &
+           grepl("human", RIGHT_INTEREST_AREA_LABEL)) |
+        (subject == "Zserbo" &
+           grepl("human", RIGHT_INTEREST_AREA_LABEL)),
+      "fam_dyn_human_ball_right",
+      RIGHT_INTEREST_AREA_LABEL
+    )))
 ```
 
 ```{r}
@@ -86,8 +133,10 @@ levels(as.factor(sample.data.ft$trial_type))
 levels(as.factor(sample.data.ft$IA_fam_object))
 levels(as.factor(sample.data.ft$ia_object))
 levels(as.factor(sample.data.ft$trialtype_object))
-
-xx<-sample.data.ft%>%filter(RIGHT_INTEREST_AREAS == "[ 2, 5 ]" | RIGHT_INTEREST_AREAS == "[ 4, 5 ]")
+levels(as.factor(sample.data.ft$overlapping_IA))
+table(sample.data.ft$subject, sample.data.ft$RIGHT_INTEREST_AREA_LABEL )
+table(sample.data.ft$IA_fam_object, sample.data.ft$RIGHT_INTEREST_AREA_LABEL )
+xx<-sample.data.ft%>%filter(RIGHT_INTEREST_AREAS == "[ 2, 5 ]" | RIGHT_INTEREST_AREAS == "[ 4, 5 ]") #check that RIGHT_INTEREST_AREA_LABEL always shows the object IAs when object and agent are overlapping --> yes
 levels(as.factor(xx$RIGHT_INTEREST_AREA_LABEL))
 sample.data.ft%>%filter(is.na(time))
 min(sample.data.ft$time)
@@ -105,5 +154,180 @@ table(sample.data.ft$subject, sample.data.ft$IA_fam_object)
 
 
 ```
+
+identify the time points when the video frame, in which object starts moving after being pushed by agent, is shown
+```{r}
+ref_time_data<-sample.data.ft %>% filter(SAMPLE_MESSAGE == "video_frame646") %>%
+  select(subject, session_number, time)%>%
+  rename(agent_arrival_time2 = time)
+```
+
+
+
+### Analysis of anticipatory looks to target
+```{r}
+#determine when dogs looked first at the agent
+first_look_to_agent <- sample.data.ft %>%
+  filter(overlapping_IA %in% c("agent_object", "agent")) %>%
+  group_by(subject, session_number) %>%
+  summarise(first_agent_look = min(time))
+```
+
+first remove data before agent starts moving and before they looked at the agent
+```{r}
+sample.data.ft.al <- sample.data.ft %>%
+  filter(RIGHT_IN_BLINK!=1, RIGHT_IN_SACCADE!=1) %>%
+  filter(time > agent_start_time) %>% # remove data before the agent starts moving
+  full_join(first_look_to_agent) %>%
+  filter(time > first_agent_look) %>%# remove data before they looked at the agent for the first time
+  full_join(ref_time_data) %>%
+  mutate(ref_time = time - agent_arrival_time2)
+
+```
+now determine the time when they first look to the object
+```{r}
+sample.data.ft.al.agg<- sample.data.ft.al%>%
+  group_by(subject, session_number, trialtype_agent, trialtype_object, trialtype_side, age, sex, agent_first, IA_fam_object) %>%
+  summarise(first_object_look = min(ref_time))%>%
+  ungroup() %>%
+  filter(IA_fam_object!="") %>%
+  mutate(
+        session_number = as.numeric(session_number),
+        session_withinagent = as.numeric(ifelse(
+          session_number >= 3, session_number - 2, session_number
+        ))
+      )
+```
+plot the distribution of first object looks
+```{r}
+sample.data.ft.al.agg2 <- sample.data.ft.al.agg %>%
+  group_by(subject, trialtype_agent, IA_fam_object) %>%
+  summarise(mean_first_object_look = mean(first_object_look))
+
+ggplot(sample.data.ft.al.agg2, aes(x=IA_fam_object, y = mean_first_object_look)) +
+  facet_wrap(~trialtype_agent)+
+  geom_boxplot(outlier.color = "white")+
+  geom_count(alpha=0.4)+
+  geom_line(aes(group=subject), lty=2, color="grey")+
+  theme_bw()
+
+```
+
+## preregistered analysis
+
+```{r}
+sample.data.ft.al.target <- sample.data.ft.al.agg %>%
+  filter(IA_fam_object == "target")
+sample.data.ft.al.target$z.session <- as.vector(scale(sample.data.ft.al.target$session_withinagent, center =TRUE, scale = TRUE))
+sample.data.ft.al.target$trialtype_agent.c <-
+  as.vector(scale(as.numeric(
+    as.factor(sample.data.ft.al.target$trialtype_agent)
+  ), center = TRUE, scale = FALSE))
+
+
+```
+
+```{r}
+xx.fe.re=fe.re.tab(fe.model="first_object_look ~ trialtype_agent + agent_first + z.session",
+re="(1|subject)", data=sample.data.ft.al.target)
+xx.fe.re$summary
+
+table(sample.data.ft.al.target$trialtype_agent, sample.data.ft.al.target$subject )
+```
+
+fit model (testing the latency of the first look to the target object in the first familiarisation trial)
+```{r}
+
+mm1.ft.al<-lme4::lmer(first_object_look ~ trialtype_agent + agent_first + z.session +
+            (1+z.session|subject), data=sample.data.ft.al.target, REML=FALSE)
+
+```
+
+```{r}
+diagnostics.plot(mm1.ft.al, size.fac=2)
+
+ranef.diagn.plot(mm1.ft.al)
+```
+collinearity for a model lacking the interaction
+```{r}
+library(car)
+xx<-lm(first_object_look ~ trialtype_agent + agent_first + z.session,
+             data=sample.data.ft.al.target, REML=FALSE)
+vif(xx)
+```
+
+
+Individual fixed effects
+```{r}
+summary(mm1.ft.al)
+
+library(lmerTest)
+
+mm1.ft.al.reml <-
+  lmerTest::lmer(
+    first_object_look ~ trialtype_agent + agent_first + z.session +
+      (1 + z.session |
+         subject),
+    data = sample.data.ft.al.target,
+    REML = TRUE
+  )
+summary(mm1.ft.al.reml)
+#
+
+```
+
+model stability: latency 
+
+```{r}
+source("functions/glmm_stability.r")
+full.stab.mm1.ft.al=glmm.model.stab(model.res=mm1.ft.al, contr=NULL,
+para=F, data=NULL)
+
+table(full.stab.mm1.ft.al$detailed$lme4.warnings)
+table(full.stab.mm1.ft.al$detailed$opt.warnings)#no warnings
+
+#table with model stability
+round(full.stab.mm1.ft.al$summary[, -1], 3)
+
+#plotting stability
+is.re.latency=grepl(x=rownames(full.stab.mm1.ft.al$summary), pattern="@")
+png("graphs/mm1_ft_al__familiarisation_stability_plot.png")
+m.stab.plot(full.stab.mm1.ft.al$summary[!is.re.latency, -1])#fixed effects
+dev.off()
+m.stab.plot(full.stab.mm1.ft.al$summary[is.re.latency, -1])#random effect
+```
+confidence intervals: latency
+```{r}
+source("functions/boot_glmm.r")
+boot.full.mm1.ft.al=boot.glmm.pred(model.res=mm1.ft.al, excl.warnings=F,
+nboots=1000, para=T, n.cores=3, resol=1000, level=0.95)
+round(boot.full.mm1.ft.al$ci.estimates, 3)
+#visualize cis
+m.stab.plot(boot.full.mm1.ft.al$ci.estimates)
+```
+###Output table: latency
+```{r}
+model_table_ft_al_fam<- bind_cols(as.data.frame(summary(mm1.ft.al)$coefficients),
+                            boot.full.mm1.ft.al$ci.estimates[1:4,],
+                            summary(mm1.ft.al.reml)$coefficients,
+                            full.stab.mm1.ft.al$summary[1:4, -1])%>% 
+  select(Estimate=`Estimate...1`, SE = `Std. Error...2`, LowerCI = X2.5., UpperCI = X97.5.,t=`t value...10`, Df=`df`, p=`Pr(>|t|)`, `min`, `max`) %>%
+  mutate(across(.cols = c(p), ~ format(round(.x, 3), nsmall=3))) %>% 
+  mutate(across(.cols = c(Estimate:Df, min, max), ~ format(round(.x, 2), nsmall=2))) %>% 
+# mutate(across(Chi2:p_LRT, ~replace_na(.x, "")))%>%
+  mutate(p=replace(p, p==0.000, "<0.001"))
+
+write.csv(model_table_ft_al_fam, file = "saves/mm1_ft_al_fam.csv")
+```
+## one-sample t-test: compare the onset of the first fixation to the target and distractor object to the reference time when the object starts moving.
+```{r}
+library(broom)
+sample.data.ft.al.ttest<-sample.data.ft.al.agg2  %>%
+  group_by(trialtype_agent, IA_fam_object) %>%
+  summarise(ttest = list(t.test(mean_first_object_look, mu=0))) %>%
+  mutate(ttest = map(ttest, tidy)) %>%
+  unnest(cols = c(ttest))
+```
+
 
 
