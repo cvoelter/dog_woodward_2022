@@ -20,6 +20,7 @@ remotes::install_github("dmirman/gazer")
 library(gazer)
 library(zoo)
 library(wesanderson)
+library(gcookbook)
 source("functions/diagnostic_fcns.r")
 source("functions/glmm_stability.r")
 source("functions/boot_glmm.r")
@@ -36,7 +37,7 @@ col1 <- 'pink1'
 col2 <- 'black'
 col3 <- 'indianred'
 
-load("pupil_size.RData")
+#load("pupil_size.RData")
 ```
 
 
@@ -50,8 +51,8 @@ time <- seq(from = min.time, to = max.time, by = 1)
 xx <- as.data.frame(time)
 str(xx)
 
-baseline.end<-4000 #first 4 seconds of video, frozen frame with agent centered between objects (IP time, in ms)
-#agents' directional cue at frame 493 (4930 ms)
+baseline.end<-4000 #frozen frame with agent centered between objects (IP time, in ms)
+#agents' directional cue finishes around frame 493 (4930 ms)
 
 demo.data <- read_csv("data/Woodward_2022_counterbalancing.csv") %>%
   mutate(
@@ -79,7 +80,7 @@ sample.data<-read_parquet("data/Woodward2022_Sample_Report.parquet") %>%
 
 
 ```{r}
-#data checks
+#data checks and preparation
 str(sample.data)
 table(sample.data$subject,sample.data$trial_number)
 table(sample.data$subject,sample.data$num)
@@ -88,6 +89,7 @@ table(sample.data$subject,sample.data$condition)
 table(sample.data$subject,sample.data$agent)
 summary(sample.data$time)
 summary(sample.data$VIDEO_FRAME_INDEX)
+
 sample.data$RIGHT_PUPIL_SIZE<-as.numeric(sample.data$RIGHT_PUPIL_SIZE)
 summary(sample.data$RIGHT_PUPIL_SIZE)
 sample.data$RIGHT_GAZE_X<-as.numeric(sample.data$RIGHT_GAZE_X)
@@ -108,6 +110,7 @@ raw_plot_pupil<-ggplot(data = sample.data, aes(x = time, y = RIGHT_PUPIL_SIZE)) 
     theme_bw()+
   scale_color_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("new goal","new side"))+
   scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("new goal","new side"))+
+  guides(colour = guide_legend(override.aes = list(size=4)))+
   theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank(),
         panel.grid.major.y = element_blank(),
@@ -116,8 +119,37 @@ raw_plot_pupil<-ggplot(data = sample.data, aes(x = time, y = RIGHT_PUPIL_SIZE)) 
 
 raw_plot_pupil
 
-ggsave(raw_plot_pupil, filename = "graphs/raw_plot_pupil.png", width=12, height=8, scale=0.8)
+ggsave(raw_plot_pupil, filename = "graphs/raw_plot_pupil.png", width=12, height=8)
 ```
+*Plot raw data only in the IP of the baseline + analysis
+```{r}
+raw_plot_pupil_IP<-ggplot(data = sample.data, aes(x = time, y = RIGHT_PUPIL_SIZE)) +
+  ylab("Pupil size") +
+  xlab("Time (in ms)") +
+  geom_point(aes(color = condition), alpha = 0.3, size = 0.5) +
+  geom_vline(xintercept = 4000,linetype="longdash", colour="gray")+
+  geom_vline(xintercept = 3000,linetype="longdash", colour="grey")+
+  annotate("rect", xmin = 3000, xmax = 4000, ymin = 0, ymax = 15000,
+           alpha = .3,fill = "grey")+
+  facet_grid(agent~subject)+
+  xlim(3000, 8001) +
+  theme_bw()+
+  scale_color_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("new goal","new side"))+
+  scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("new goal","new side"))+
+  guides(colour = guide_legend(override.aes = list(size=4)))+
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        legend.title = element_blank(), legend.position = c(0.9, 0.9), legend.text=element_text(size=12),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+raw_plot_pupil_IP
+
+ggsave(raw_plot_pupil_IP, filename = "graphs/raw_plot_pupil_IP.png", width=12, height=8)
+```
+
 
 * Plot with blink artefacts removed
 ```{r }
@@ -152,13 +184,49 @@ artefact_check
 ggsave(artefact_check, filename = "graphs/artefact_check_100.png", width=12, height=8, dpi=600)
 ```
 
+* Plot with blink artefacts removed only in the IP of the baseline + analysis
+```{r}
+artefact_check_IP <-
+  ggplot(data = sample.data,
+         aes(x = time, y = RIGHT_PUPIL_SIZE_no_blinks)) +
+  ylab("Pupil size") +
+  xlab("Time (in ms)") +
+  geom_point(aes(color = condition), alpha = 0.3, size = 0.5) +
+  geom_vline(xintercept = 4000,linetype="longdash", colour="grey")+
+  geom_vline(xintercept = 3000,linetype="longdash", colour="grey")+
+  annotate("rect", xmin = 3000, xmax = 4000, ymin = 0, ymax = 15000,
+           alpha = .3,fill = "grey")+
+  facet_grid(agent ~ subject) +
+  xlim(3000, 8001) +
+  theme_bw() +
+  scale_color_manual(values = wes_palette("Zissou1")[c(1, 4)],
+                     labels = c("new goal", "new side")) +
+  scale_fill_manual(values = wes_palette("Zissou1")[c(1, 4)],
+                    labels = c("new goal", "new side")) +
+  guides(colour = guide_legend(override.aes = list(size=4)))+
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    legend.title = element_blank(), legend.position = c(0.9, 0.9), legend.text=element_text(size=14),
+     axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+artefact_check_IP
+
+ggsave(artefact_check_IP, filename = "graphs/artefact_check_IP.png", width=12, height=8, dpi=600)
+
+```
+
+
 ##Proportion of valid data
 ```{r}
 prop.tracked.data<-sample.data%>%
   group_by(subject, trial_number)%>%
   summarise(length=length(RIGHT_PUPIL_SIZE_no_blinks), sum_noNA=sum(!is.na(RIGHT_PUPIL_SIZE_no_blinks)), prop=sum(!is.na(RIGHT_PUPIL_SIZE_no_blinks))/length(RIGHT_PUPIL_SIZE_no_blinks), min(RIGHT_PUPIL_SIZE), max(RIGHT_PUPIL_SIZE))
 prop.tracked.data
-mean(prop.tracked.data$prop)
+mean(prop.tracked.data$prop) #mean eye-detected-time
 ```
 
 
@@ -167,14 +235,11 @@ prop.tracked.data%>%group_by(subject, trial_number)%>%summarise(min(prop))
 #this confirms that 2 test trials (Juna session 2 and Maylo session 3) have less than 70% tracked data (46% and 64% respectively)
 
 prop.tracked.gaze.data<-sample.data%>%
-  #filter(time<=4770)%>%
-  filter(subject!="Juna" | num!="2") %>%
-  filter(subject!="Maylo" | num!="3") %>%  
   filter(RIGHT_GAZE_X<1024&RIGHT_GAZE_X>0&RIGHT_GAZE_Y<768&RIGHT_GAZE_Y>0)%>%
   group_by(subject, trial_number)%>%
   summarise(prop=sum(!is.na(RIGHT_GAZE_X))/max(time))
 prop.tracked.gaze.data
-mean(prop.tracked.gaze.data$prop)
+mean(prop.tracked.gaze.data$prop) #mean on-screen-looking time
 
 prop.tracked.gaze.data%>%group_by(subject)%>%summarise(min(prop), mean(prop))
 #for Edgar_2 the eye was detected 93% of the trial time but it was only inside the video area for 66% of the time; 
@@ -185,9 +250,10 @@ prop.tracked.gaze.data%>%group_by(subject)%>%summarise(min(prop), mean(prop))
 * Plot distribution of pupil sizes
 ```{r}
 puphist <-
-  ggplot(
-    sample.data %>% filter(subject != "Juna" | num != "2") %>%
-                    filter(subject != "Maylo" | num != "3"),
+  ggplot(sample.data
+    #  %>% filter(subject != "Juna" | num != "2") %>%
+    #                 filter(subject != "Maylo" | num != "3")
+    ,
     aes(x = RIGHT_PUPIL_SIZE_no_blinks)) +
     geom_histogram(aes(y = ..count..),
                      colour = "green", binwidth = 0.5)  +
@@ -196,10 +262,12 @@ puphist
 ```
 ## Preprocessing: interpolation, baseline correction, down sampling
 ```{r}
-sample.data<-sample.data%>% filter(subject != "Juna" | trial_number != "2") %>%
+sample.data.no.missing<-sample.data%>% filter(subject != "Juna" | trial_number != "2") %>%
                             filter(subject != "Maylo" | trial_number != "3") #exclude the 2 test trials in which the eye was not tracked for more than 30% of the trial time
 #check
+table(sample.data.no.missing$subject, sample.data.no.missing$trial_number)
 table(sample.data$subject, sample.data$trial_number)
+
 
 # determine baseline
 exp.data.pupil.base <- sample.data %>%
@@ -216,8 +284,6 @@ exp.data.pupil.processed <- sample.data %>%
   ungroup() %>%
   group_by(subject, trial_number) %>%
   mutate(pupil.inter = na.approx(RIGHT_PUPIL_SIZE_no_blinks, na.rm = FALSE, maxgap = 500)) %>% #linear interpolation
-  #LL: now that I excluded the two trials with less than 70% tracked data,
-  #an error occurs that prevents linear interpolation
   full_join(exp.data.pupil.base) %>% #add baseline data
   mutate(pupil.base.corrected = pupil.inter - median.base.pupil)%>% #subtractive baseline correction
   ungroup()%>%
@@ -269,7 +335,39 @@ plot.woodward.pupil.individual<-ggplot(data = exp.data.pupil.processed.downsampl
 plot.woodward.pupil.individual
 ggsave(plot.woodward.pupil.individual, filename = "graphs/pupil_processed_baseline_corrected_individual.png", height = 7, width = 20, scale = 1)
 ```
-# Plot group level data (condition)
+* Plot interpolated data: individual level, only in the IP
+```{r}
+#scale_color_brewer(palette="Dark2")+
+  #scale_fill_brewer(palette="Dark2")
+
+plot.woodward.pupil.individual_IP<-ggplot(data = exp.data.pupil.processed.downsampled2, aes(x = bin_low, y =pupil.base.corrected.binned )) +
+  ylab("Pupil size ") +
+  xlab("Time (in ms)") +
+  geom_vline(aes(xintercept=baseline.end), lty=2, alpha=0.3)+
+  geom_vline(aes(xintercept=3000), lty=2, alpha=0.3)+
+  annotate("rect", xmin = 3000, xmax = 4000, ymin = 0, ymax = 15000,
+           alpha = .3,fill = "grey")+
+  geom_point(aes(color = as.factor(condition)), alpha = 0.8, size = 0.5) +
+  geom_line(aes(color = as.factor(condition)), alpha = 0.8) +
+  facet_grid(agent~subject)+
+  xlim(3000, 8001) +
+    theme_bw()+
+    scale_color_manual(values = wes_palette("Zissou1")[c(1, 4)],
+                     labels = c("New goal", "New side")) +
+  scale_fill_manual(values = wes_palette("Zissou1")[c(1, 4)],
+                    labels = c("New goal", "New side")) +
+  guides(colour = guide_legend(override.aes = list(size=4)))+
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        legend.title = element_blank(), legend.position = c(0.9,0.9),
+        legend.key.size = unit(0.2, "cm"))
+
+plot.woodward.pupil.individual_IP
+ggsave(plot.woodward.pupil.individual, filename = "graphs/pupil_processed_baseline_corrected_individual_IP.png", height = 7, width = 20, scale = 1, dpi=600)
+```
+# Plot group level data 
 ```{r}
 
 pupil.group.level <- exp.data.pupil.processed.downsampled2 %>%
@@ -279,11 +377,14 @@ pupil.group.level <- exp.data.pupil.processed.downsampled2 %>%
 
 plot.woodward.pupil.group <- ggplot(data = pupil.group.level, aes(x = bin_low, y = mean.pupil.corrected.binned)) +
   geom_vline(aes(xintercept=baseline.end), lty=2, alpha=0.3)+
-    ylab("Pupil size") +
+  #geom_vline(aes(xintercept=3000), lty=2, alpha=0.3)+
+  # annotate("rect", xmin = 3000, xmax = 4000, ymin =0, ymax = 1000,
+  #          alpha = .3,fill = "grey")+
+     ylab("Pupil size") +
   xlab("Time (in ms)") +
   geom_point(aes(x = bin_low, y = mean.pupil.corrected.binned, color = condition), alpha = 0.9, size = 0.5) +
   geom_ribbon(aes(ymin = mean.pupil.corrected.binned - se.pupil.corrected.binned, ymax = mean.pupil.corrected.binned + se.pupil.corrected.binned, fill = condition), alpha = 0.7) +
-    xlim(0, 22000) +
+  xlim(3000, 8001) +
     theme_bw()+
   scale_color_manual(values = wes_palette("Zissou1")[c(1, 4)],
                      labels = c("New goal", "New side")) +
@@ -295,7 +396,7 @@ plot.woodward.pupil.group <- ggplot(data = pupil.group.level, aes(x = bin_low, y
         panel.grid.major.y = element_blank(),
         panel.grid.minor.y = element_blank(),
         legend.title = element_blank(), 
-        legend.position = c(0.80, 0.15),  
+        legend.position = c(0.80, 0.85),  
         legend.text=element_text(size=12),
         axis.text=element_text(size=11),
         axis.title=element_text(size=12))+
@@ -303,36 +404,7 @@ plot.woodward.pupil.group <- ggplot(data = pupil.group.level, aes(x = bin_low, y
 
 plot.woodward.pupil.group
 
-#ggsave(plot.woodward.pupil.group, filename = "graphs/pupil_group_condition.png", height = 5, width = 8, scale = 0.7, dpi=600)
-```
-#Plot group level data (agent)
-```{r}
-plot.woodward.pupil.group.agent <- ggplot(data = pupil.group.level, aes(x = bin_low, y = mean.pupil.corrected.binned)) +
-  geom_vline(aes(xintercept=baseline.end), lty=2, alpha=0.3)+
-    ylab("Pupil size") +
-  xlab("Time (in ms)") +
-  geom_point(aes(x = bin_low, y = mean.pupil.corrected.binned, color = agent), alpha = 0.9, size = 0.5) +
-  geom_ribbon(aes(ymin = mean.pupil.corrected.binned - se.pupil.corrected.binned, ymax = mean.pupil.corrected.binned + se.pupil.corrected.binned, fill = agent), alpha = 0.7) +
-    xlim(0, 22000) +
-    theme_bw()+
-  scale_color_manual(values = wes_palette("Zissou1")[c(1, 4)],
-                     labels = c("Human", "Inanimate")) +
-  scale_fill_manual(values = wes_palette("Zissou1")[c(1, 4)],
-                    labels = c("Human", "Inanimate")) +
-  guides(colour = guide_legend(override.aes = list(size=2)))+
-  theme(panel.grid.major.x = element_blank(),
-        panel.grid.minor.x = element_blank(),
-        panel.grid.major.y = element_blank(),
-        panel.grid.minor.y = element_blank(),
-        legend.title = element_blank(), 
-        legend.position = c(0.80, 0.15),  
-        legend.text=element_text(size=12),
-        axis.text=element_text(size=11),
-        axis.title=element_text(size=12))
-
-plot.woodward.pupil.group.agent
-
-ggsave(plot.woodward.pupil.group.agent, filename = "graphs/pupil_group_agent.png", height = 5, width = 8, scale = 0.7, dpi=600)
+ggsave(plot.woodward.pupil.group, filename = "graphs/pupil_group_condition.png", height = 5, width = 10, scale = 1, dpi=600)
 ```
 
 #GAMM
@@ -358,7 +430,7 @@ bp <- sortBoxplot(exp.data.pupil.processed.downsampled$pupil.base.corrected.binn
 * select interest period
 ```{r}
 dat <- exp.data.pupil.processed.downsampled%>%
-  filter(bin_low >= 5000 & bin_low <= 9000)%>% #select interest period
+  filter(bin_low >= 4001 & bin_low <= 8001)%>% #select interest period
   rename(pupil_base="pupil.base.corrected.binned", time="bin_low")%>%
   arrange(subject,condition, agent, time, trial_number)%>%#order dataframe
   droplevels() %>% 
@@ -388,16 +460,15 @@ dat$Event <- interaction(dat$subject, dat$test_event, dat$trial_number, drop=TRU
 levels(dat$Event)
 
 library(mgcv)
-gammm.int <- bam(pupil_base ~ condition*agent + 
+gamm.int <- bam(pupil_base ~ condition*agent + 
            s(time, k=20) + 
            s(time, by= condition, k=20) +
              #argument by: fit different smooths for different levels of a categorical variables (factor-smooth interaction)
            s(time, by= agent, k=20) +
            s(Xgaze, Ygaze) +
-           s(time, Event, bs='fs', m=1), #LL: is time needed here or is Event alone sufficient?
+           s(time, Event, bs='fs', m=1), 
            #bs="fs" is for random wiggly curves: produces a smooth curve for each level of a single factor, treating the curves as entirely random
            data=dat, discrete=TRUE, nthreads=40, method="ML") 
-#LL: why ML instead of REML?
 
 gamm.null <- bam(pupil_base ~ s(time, k=20)+ 
           + s(Xgaze, Ygaze)
@@ -405,13 +476,12 @@ gamm.null <- bam(pupil_base ~ s(time, k=20)+
           , data=dat, discrete=TRUE, nthreads=40, method="ML")
 
 #full-null model comparison 
-compareML(gamm.null, gammm.int) #AIC difference: 29.12, model gammm.int has lower AIC.#LL: is it ok that there is no chisq test for the difference in ML scores? 
-# "Chi-square test of ML scores
+compareML(gamm.null, gamm.int) #AIC difference: 32.58, model gammm.int has lower AIC.
 # -----"?
 
-AIC(gammm.int, gamm.null)
+AIC(gamm.int, gamm.null)
 
-summary(gammm.int)#linear interaction not significant, we remove it
+summary(gamm.int)#linear interaction not significant, we remove it
 
 gamm.full <- bam(pupil_base ~ condition + agent + 
            s(time, k=20) + 
@@ -454,8 +524,8 @@ dev.off()
 ```{r}
 summary(gamm.full)
 ###Fixed effects:
-#in the new side condition, the pupil is in general larger than in the new goal condition, irrespective of the agent shown (t=2.57, P=0.010).
-#Agent did not have a significant effect (t=1.77, P=0.077)
+#in the new side condition, the pupil is in general larger than in the new goal condition, irrespective of the agent shown (t=2.36, P=0.019).
+#Agent did not have a significant effect (t=0.47, P=0.638)
 ```
 
 * difference curve
