@@ -330,8 +330,7 @@ write.csv(model_table_ft_al_fam, file = "saves/mm1_ft_al_fam.csv")
 ```
 ## one-sample t-test: compare the onset of the first fixation to the target and distractor object to the reference time when the object starts moving.
 
-##LL: check what kind of p-value adjustment is performed here for multiple testing
-##CHECK MY NOTES on how to interpret this table in terms of nr of dogs doing X
+##LL: Shouldn't a p-value adjustment be performed here for multiple testing?
 
 ```{r}
 library(broom)
@@ -340,6 +339,10 @@ sample.data.ft.al.ttest<-sample.data.ft.al.agg2  %>%
   summarise(ttest = list(t.test(mean_first_object_look, mu=0))) %>%
   mutate(ttest = map(ttest, tidy)) %>%
   unnest(cols = c(ttest))
+
+p.adjust(sample.data.ft.al.ttest$p.value, method = "holm", n = length(sample.data.ft.al.ttest$p.value))#when correcting for multiple comparisons, the trends disappear
+#BH=Benjamini & Hochberg (1995) method
+
 ```
 
 ##LMM distractor
