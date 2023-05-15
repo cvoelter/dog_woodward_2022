@@ -221,6 +221,54 @@ fam_gat_dt<-ggplot(sample.data.ft.al.agg2, aes(x=IA_fam_object, y = mean_first_o
 ggsave(fam_gat_dt, filename= "graphs/fam_gat_dt.png", height=6, width=10, scale=0.7, dpi=1200)
 
 ```
+plot the distribution of first object looks, with different panels
+```{r}
+sample.data.ft.al.agg2 <- sample.data.ft.al.agg %>%
+  group_by(subject, trialtype_agent, IA_fam_object) %>%
+  summarise(mean_first_object_look = mean(first_object_look))
+
+fam_gat_dt2<-ggplot(sample.data.ft.al.agg2, aes(x=trialtype_agent, y = mean_first_object_look)) +
+  facet_wrap(~IA_fam_object)+
+  ylab("Gaze arrival time to the objects relative to the agent (ms)")+
+  xlab("Agent")+
+  geom_boxplot(outlier.color = "white")+
+  geom_hline(yintercept=0, linetype='dashed', col = 'red')+
+  geom_count(alpha=0.4)+
+  geom_line(aes(group=subject), lty=2, color="grey")+
+  ylim(-5000, 5000)+
+  #geom_segment(data= , aes(x = 1, y = 4800, xend = 2, yend = 4800))+
+  #geom_text(data= , aes(x=1.5, y=4850, label=c("ns")))+
+  theme_bw()+
+  theme(axis.text=element_text(size=12))
+fam_gat_dt2
+
+# annot.data<-data.frame(
+#   label= c("ns","*"),
+#   obj=c("Distractor", "Target"),
+#   x=c(1.5, 1.5),
+#   y=c(4850,4850))
+# fam_gat_dt2<-fam_gat_dt2 + geom_text(
+#   data    = annot.data,
+#   mapping = aes(x = x, y = y, label = label)
+# )
+
+lines<-tibble(
+  metric=c("Distractor", "Target"),
+  x= c(1,1),
+  xend = c(2,2) ,
+  y = c(4950, 4800),
+  yend = y
+)
+
+fam_gat_dt_sign<-fam_gat_dt2+
+  geom_segment(data=lines, aes(x=x, xend=xend, y=y, yend=yend), inherit.aes=FALSE)
+
+fam_gat_dt_sign
+
+
+ggsave(fam_gat_dt2, filename= "graphs/fam_gat_dt2.png", height=6, width=10, scale=0.7, dpi=1200)
+
+```
 
 ## preregistered analysis
 
