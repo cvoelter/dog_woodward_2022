@@ -396,15 +396,18 @@ plot.woodward.pupil.group <- ggplot(data = pupil.group.level, aes(x = bin_low, y
         panel.grid.major.y = element_blank(),
         panel.grid.minor.y = element_blank(),
         legend.title = element_blank(), 
-        legend.position = c(0.80, 0.85),  
-        legend.text=element_text(size=12),
-        axis.text=element_text(size=11),
+        #legend.position = "bottom",
+        legend.position = c(0.92, 0.92), 
+        legend.margin = margin(0.1,0.1,0.01,0.1),
+        legend.text=element_text(size=8),
+        legend.key.size = unit(0.4, 'cm'),
+        axis.text=element_text(size=9),
         axis.title=element_text(size=12))+
   facet_wrap(~agent)
 
 plot.woodward.pupil.group
 
-ggsave(plot.woodward.pupil.group, filename = "graphs/pupil_group_condition.png", height = 5, width = 10, scale = 1, dpi=600)
+ggsave(plot.woodward.pupil.group, filename = "graphs/pupil_group_condition.png", height = 5, width = 10, scale = 0.7, dpi=600)
 ```
 
 #GAMM
