@@ -352,7 +352,7 @@ first4s.data.first.fix.nolooked.included.agg<-first4s.data.first.fix %>%
 al_plot_NAs_included<-ggplot(first4s.data.first.fix.nolooked.included.agg, aes(x = trialtype_agent, y = first_fix_old_goal_mean)) +
   geom_bar(stat="identity") + 
   facet_wrap(~session_withinagent)+
-  ylim(0,1)+
+  ylim(0,0.5)+
   ylab("Prop. dogs fixating the old goal first")+
   xlab("Agent")+
   theme(axis.text = element_text(size = 14))+  #axis text size 
@@ -385,13 +385,15 @@ al_plot_NAs_included2<-ggplot(first4s.data.first.fix.nolooked.included.agg.long,
   geom_bar(stat="identity", position = position_dodge(0.9), alpha=0.8) + 
   geom_errorbar(aes(ymin = prop.dogs - se.dogs, ymax = prop.dogs + se.dogs), width = 0.2, position = position_dodge(0.9))+
   facet_wrap(~session_withinagent)+
-  ylim(0,1)+
+  ylim(0,0.5)+
   ylab("Prop. dogs")+
   xlab("Agent")+
   theme(axis.text = element_text(size = 14))+  #axis text size 
   theme(axis.title = element_text(size = 16)) +
   theme_bw() +
-  scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("old goal","old side"))
+  scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("old identity - 
+new side","old side - 
+new identity"))
 
 al_plot_NAs_included2
 
@@ -664,38 +666,45 @@ summary(mm1.latency.reml)
 ```
 ```{r}
 first4s.data.latency.first.fix.long.agg<- first4s.data.latency.first.fix.long %>%
-  group_by(trialtype_agent, IA, subject)%>%
-  summarise(mean_latency = mean(latency))
+  rename(AoI=IA) %>% 
+  group_by(trialtype_agent, AoI, subject)%>%
+  summarise(mean_latency = mean(latency)*-1) #multiplied by -1 so as to have 0 as the maximum value and all other latencies as negative numbers given that these are all anticipatory looks (happening before the agents start to move)
 library(wesanderson)
 library(ggbeeswarm)
 library(ggsignif)
+library(vipor)
 
-latency_AL_AOIs_plot<-ggplot(first4s.data.latency.first.fix.long.agg, aes(x = trialtype_agent, y = mean_latency, fill = IA)) +
+latency_AL_AOIs_plot<-ggplot(first4s.data.latency.first.fix.long.agg, aes(x = trialtype_agent, y = mean_latency, fill = AoI)) +
   geom_boxplot(position = position_dodge(0.8), alpha=0.8, outlier.colour = "white") +
   #scale_fill_viridis(discrete = TRUE,  option = "viridis", begin=0.25, labels= c("old side","old goal"))+
   #scale_fill_manual(values=wes_palette("IsleofDogs1"), labels= c("old side","old goal"))+
-  scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("old side","old goal"))+
+  scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("old identity - 
+new side","old side - 
+new identity"))+
   #scale_fill_manual(values=wes_palette("FantasticFox1")[c(3,4)], labels= c("old side","old goal"))+
   #scale_fill_manual(values=wes_palette("Royal1")[c(2,1)], labels= c("old side","old goal"))+
-  #geom_quasirandom(method = "pseudorandom", width=0.2, position = position_dodge(0.8))+
-  geom_jitter(position = position_dodge(0.8), alpha=.5, size=2)+
+  geom_quasirandom(method = "pseudorandom", width=0.2, dodge.width=.8, alpha=.4, size=2)+
+  #geom_jitter(width=0.1, alpha=.4, size=2)+
+  #geom_jitter(position = position_dodge(0.8), alpha=.4, size=2)+
   #scale_fill_manual(values=c("dodgerblue", "darkorange"), labels= c("old side","old goal"))+
-  ylim(0,4000)+
-  ylab("Mean latency to first fix.")+
+  ylim(-3800,250)+
+  ylab("Mean latency to first fixation")+
   xlab("Agent")+
   #geom_text(x=2, y=3200, label="*", size=6, col="black")+
-  geom_signif(xmin=0.8, xmax=1.8, annotations="*", #LMM, test of fixed effect of agent (involved in interaction)
-              y_position = 3600, tip_length = 0.01)+
+  geom_signif(xmin=1.2, xmax=2.2, annotations="*", #LMM, test of fixed effect of agent (involved in interaction)
+              y_position = 200, tip_length = 0.01)+
   geom_signif(xmin=1.8, xmax=2.2, annotations="*", #LMM relevelled so that inanimate is the reference category, test of fixed effect of AoI (involved in interaction)
-              y_position = 3900, tip_length = 0.01)+
-  theme_bw()
+              y_position = -50, tip_length = 0.01)+
+  theme_bw()+
+  theme(axis.text=element_text(size=12))+
+  theme(axis.title=element_text(size=12))
 latency_AL_AOIs_plot
 ```
 ```{r}
-ggsave(filename="graphs/latency_AL_AOIs.png",
+ggsave(filename="graphs/latency_AL_AOIs2.png",
   plot = latency_AL_AOIs_plot,
-  width=8.5,
-  height=5,
+  width=10,
+  height=6,
   scale=0.55,
   dpi=1200)
 ```

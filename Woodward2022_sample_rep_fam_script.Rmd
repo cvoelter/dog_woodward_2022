@@ -10,6 +10,8 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(arrow)
 library(lme4)
+library(cowplot)
+library(dplyr)
 
 
 source("./functions/diagnostic_fcns.r")
@@ -23,7 +25,7 @@ source("./functions/extract_ranef_gmmTMB.r")
 load("./workspaces/fam.RData")
 
 ```
-Idea: find the first fixation to object after first fixation at agent and after agent started moving (at around 1600). Approach: delete sample before the agent was looked at and before agent started moving. 
+Find the first fixation to object after first fixation at agent and after agent started moving (at around 1600). Delete samples before the agent was looked at and before agent started moving. 
 ```{r}
 #video frame in which the objects starts moving: 646
 agent_start_time <- 1600
@@ -252,21 +254,77 @@ fam_gat_dt2
 #   mapping = aes(x = x, y = y, label = label)
 # )
 
-lines<-tibble(
-  metric=c("Distractor", "Target"),
-  x= c(1,1),
-  xend = c(2,2) ,
-  y = c(4950, 4800),
-  yend = y
-)
+# lines<-tibble(
+#   metric=c("Distractor", "Target"),
+#   x= c(1,1),
+#   xend = c(2,2) ,
+#   y = c(4950, 4800),
+#   yend = y
+# )
 
-fam_gat_dt_sign<-fam_gat_dt2+
-  geom_segment(data=lines, aes(x=x, xend=xend, y=y, yend=yend), inherit.aes=FALSE)
-
-fam_gat_dt_sign
+# fam_gat_dt_sign<-fam_gat_dt2+
+#   geom_segment(data=lines, aes(x=x, xend=xend, y=y, yend=yend), inherit.aes=FALSE)
+# 
+# fam_gat_dt_sign
 
 
 ggsave(fam_gat_dt2, filename= "graphs/fam_gat_dt2.png", height=6, width=10, scale=0.7, dpi=1200)
+
+```
+plot the distribution of first object looks, with different panels, jittered points and significance levels
+```{r}
+sample.data.ft.al.agg.target <- sample.data.ft.al.agg %>%
+  group_by(subject, trialtype_agent, IA_fam_object) %>%
+  filter(IA_fam_object=="target")%>% 
+  summarise(mean_first_object_look = mean(first_object_look))
+
+#target plot
+fam_gat_target<-ggplot(sample.data.ft.al.agg.target, aes(x=trialtype_agent, y = mean_first_object_look)) +
+  ylab("Gaze arrival time to the target relative to the agent (ms)")+
+  xlab("Agent")+
+  geom_boxplot(outlier.color = "white")+
+  geom_hline(yintercept=0, linetype='dashed', col = 'red')+
+  geom_jitter(width = 0.2, alpha=0.4, size=2)+
+  geom_line(aes(group=subject), lty=2, color="grey")+
+  ylim(-5000, 5000)+
+  geom_segment(data= , aes(x = 1, y = 4800, xend = 2, yend = 4800))+
+  geom_text(data= , aes(x=1.5, y=4850, label=c("*")), size=9)+
+  theme_bw()+
+  theme(axis.text=element_text(size=12))+
+  theme(axis.title=element_text(size=12))
+fam_gat_target
+
+#distractor plot
+sample.data.ft.al.agg.distractor <- sample.data.ft.al.agg %>%
+  group_by(subject, trialtype_agent, IA_fam_object) %>%
+  filter(IA_fam_object=="distractor")%>% 
+  summarise(mean_first_object_look = mean(first_object_look))
+
+fam_gat_distractor<-ggplot(sample.data.ft.al.agg.distractor, aes(x=trialtype_agent, y = mean_first_object_look)) +
+  ylab("Gaze arrival time to the distractor relative to the agent (ms)")+
+  xlab("Agent")+
+  geom_boxplot(outlier.color = "white")+
+  geom_hline(yintercept=0, linetype='dashed', col = 'red')+
+  geom_jitter(width = 0.2, alpha=0.3, size=2)+
+  geom_line(aes(group=subject), lty=2, color="grey")+
+  ylim(-5000, 5000)+
+  #geom_segment(data= , aes(x = 1, y = 4800, xend = 2, yend = 4800))+
+  #geom_text(data= , aes(x=1.5, y=4850, label=c("ns")))+
+  theme_bw()+
+  theme(axis.text=element_text(size=12))+
+  theme(axis.title=element_text(size=12))
+fam_gat_distractor
+
+fam_ft_gat<-plot_grid(fam_gat_target, NULL, fam_gat_distractor, labels = c("A)","","B)"), 
+                      rel_widths=c(1, 0.07, 1), label_size = 12,
+                      nrow=1,
+                      label_x = 0,label_y=1,
+                      hjust = 0.8, vjust=-0.8)+
+            theme(plot.margin = unit(c(1.3,0.2,0.3,1), "lines"))
+fam_ft_gat
+
+ggsave(fam_ft_gat, filename= "graphs/fam_gat_grid.png", height=5, width=7, #scale=0.7, 
+       dpi=1200)
 
 ```
 
