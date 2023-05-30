@@ -1,0 +1,108 @@
+---
+title: "Post-hoc power analysis for Woodward dogs 2022"
+author: "Lucrezia Lonardo"
+date: "29/05/2023"
+output: html_document
+---
+
+###Sensitivity analysis: what effect size can we (i.e., do we have enough power to) detect with a fixed sample size? - VoE/Lookin times to agent + object during test
+```{r}
+#Based on the Woodward 2022 dogs data, dwell times to agent + target object in the test trials
+#difference in dwell times between conditions (new side - new goal)= -523.24
+#dwell times in new side (control)=~ 7948 ms
+#create a population
+set.seed(86)
+nr.sims = 5000
+nr.subjects<-200 #in the population
+nr.trials<-4
+nr.obs.pop=nr.subjects*nr.trials #200 dogs, 4 trials each (2 conditions, 2 agents)
+
+#in the experiment 
+sample.size = 19 #sample
+n.data.points= sample.size*nr.trials
+SE=920.46
+pop.sd = sqrt(nr.obs.pop)*SE
+ERROR=rnorm(n=nr.obs.pop, mean=0, sd=pop.sd)
+
+#create predictors and random effects
+subject=rep(1:nr.subjects, nr.trials) #because we have 4 trials in this case
+subject<-as.factor(sort(subject, decreasing=FALSE))
+condition=rep(c("new goal", "new side"), nr.obs.pop/2)
+condition.dummy=ifelse(condition=="new goal", 1,0)
+agent=rep(c("human", "inanimate"), nr.obs.pop/2)
+agent.dummy=ifelse(agent=="human", 1,0)
+#agent_first=ifelse(subject%in%c("1", "3", "4", "6", "7", "13", "16", "17", "18", "19"),"human","inanimate") #this would work for the sample but not the population
+agent_first=ifelse(as.numeric(subject)%%2 ==0, "human", "inanimate") #based on whether subject has an odd or even ID
+trial.nr=rep(1:4,nr.subjects)
+
+population<- data.frame(subject, trial.nr, condition, agent, agent_first)
+
+#prepare data for model
+population$z.session<-as.vector(scale(population$trial.nr, center = TRUE, scale=TRUE))
+population$condition.c = as.vector(scale(
+  as.numeric(
+    population$condition == levels(as.factor(
+      population$condition
+    ))[2]
+  ),
+  center = TRUE,
+  scale = FALSE
+))
+levels(as.factor(population$condition.c))
+
+population$agent <-
+  as.factor(population$agent)
+levels(population$agent)
+
+population$agent.c = as.vector(scale(
+  as.numeric(
+    population$agent == levels(as.factor(population$agent))[2]
+  ),
+  center = TRUE,
+  scale = FALSE
+))
+
+population$agent_first.c = as.vector(scale(
+  as.numeric(population$agent_first == levels(
+    as.factor(population$agent_first)
+  )[2]),
+  center = TRUE,
+  scale = FALSE
+))
+
+##vectors 
+
+#vector containing the different effect sizes to be investigated
+Effsizes = seq(0.1,2,by=0.1) 
+
+#vector containing the results (p values) for each of the 5000 simulations for each effect size
+res.test = rep(NA, nr.sims) 
+
+#vector containing the sensitivity (i.e., probability to detect a significant effect, prop. p<0.05) for each of the different effect sizes
+res.effsizes= rep(NA, length(Effsizes)) 
+
+##
+for(EFSize in 1:length(Effsizes)){
+	for(i in 1: nr.sims){
+		population$LookingTime <- 7948 + -523.24*Effsizes[EFSize]* condition.dummy + ERROR
+		data.sample <- population[sample(1:n.data.points, size= sample.size, replace=F),]
+		xx <- lmerTest::lmer(LookingTime ~ condition + agent +
+                            z.session +  agent_first +
+            (1|subject), data=data.sample, REML=TRUE)
+		res.test[i] <- summary(xx)$coefficients[,5]
+	}
+res.effsizes[EFSize] <- sum(res.test<0.05)/length(res.test)
+}
+
+# These two vectors contain the results of interest:
+length(Effsizes)
+length(res.effsizes) #sensitivity
+
+sensitivity.results<-cbind(Effsizes, res.effsizes)
+sensitivity.results
+
+plot(x=Effsizes, y=res.effsizes, xlab="Effect sizes", ylab="Sensitivity", cex=1.3)#+
+#abline(h=80, lwd=1.5,col="blue")
+```
+#check if the values of pop.$LT are sensible as looking times
+```
