@@ -12,6 +12,7 @@ library(tidyverse)
 library(summarytools)
 library(exactRankTests)
 library(ggpubr)
+load("./workspaces/ET_dog_woodward_kano_paradigm.RData")
 
 ```
 
