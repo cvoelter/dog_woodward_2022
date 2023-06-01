@@ -12,6 +12,9 @@ library(tidyverse)
 library(summarytools)
 library(exactRankTests)
 library(ggpubr)
+library(glmmTMB)
+library(car)
+library(lme4)
 source("./functions/diagnostic_fcns.r")
 source("./functions/glmm_stability.r")
 source("./functions/boot_glmm.r")
@@ -251,8 +254,6 @@ model.data.end.IP.largerIA$prop.dwell.scaled <-
       ) + 0.5
   ) / length(model.data.end.IP.largerIA$proportion.object.congruent.dwell.time_noNA)#transform DV to exclude 0 and 1s
 
-library(glmmTMB)
-
 m1.endIP.largeIA<-glmmTMB(prop.dwell.scaled ~ condition + z.trial + condition_first +  target_location+(1+condition.c+z.trial||subject), family=beta_family, data=model.data.end.IP.largerIA,  control=glmmTMBControl(optCtrl=list(iter.max=100000000, eval.max=100000000)))
 
 summary(m1.endIP.largeIA)
@@ -285,7 +286,6 @@ overdisp.test(m1.endIP.largeIA)
 ranef.diagn.plot(m1.endIP.largeIA) 
 
 #collinearity
-library(car)
 xx=lme4::lmer(prop.dwell.scaled ~ condition + z.trial + condition_first +  target_location +
 (1+condition.c+z.trial||subject),
 data=model.data.end.IP.largerIA)
@@ -327,7 +327,8 @@ model.data.end.IP.largerIA$prop.dwell.scaled2 <-
   ) / length(model.data.end.IP.largerIA$proportion.object.congruent.dwell.time)#transform DV to exclude 0 and 1s
 
 m1.endIP.largeIA_interceptonly<-glmmTMB(prop.dwell.scaled2 ~  z.trial+(1+z.trial||subject), family=beta_family, data=model.data.end.IP.largerIA,  control=glmmTMBControl(optCtrl=list(iter.max=100000000, eval.max=100000000)))
-summary(m1.endIP.largeIA_interceptonly)
+
+round(summary(m1.endIP.largeIA_interceptonly)$coefficients$cond,3)
 ```
 
 ### first look analysis (binary)
@@ -339,24 +340,45 @@ model.data.end.IP.first.looks<-end.ip.first.look%>%
 summary(model.data.end.IP.first.looks)
 
 
-library(lme4)
-
 m1.endIP.first_look<-glmer(object_congruent_first_look_noNA ~ condition + z.trial + condition_first+ target_location+(1+condition.c+z.trial|subject), family=binomial, data=model.data.end.IP.first.looks, control=glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000000)))
 
-summary(m1.endIP.first_look)
+round(summary(m1.endIP.first_look)$coefficients,2)
 ```
 
 
 ```{r}
 drop1_m1.first.look<-drop1(m1.endIP.first_look, test="Chisq")
-drop1_m1.first.look
+round(drop1_m1.first.look,3)
 ```
+####assumptions and stability
+```{r}
+#BLUPs
+ranef.diagn.plot(m1.endIP.first_look)
+
+#Stability
+stab.m1.endIP.first_look=glmm.model.stab(model.res=m1.endIP.first_look,
+contr=glmerControl(optimizer="bobyqa",
+optCtrl=list(maxfun=10000)))
+
+round(stab.m1.endIP.first_look$summary[1:5, -1],2)
+m.stab.plot(stab.m1.endIP.first_look$summary[, -1])
+```
+####CIs binomial model first fixation
+```{r}
+boot.m1.endIP.first_look=boot.glmm.pred(model.res=m1.endIP.first_look,
+nboots=1000, para=T, resol=1000, level=0.95,
+use=NULL, n.cores="all-1")
+
+first.fix.bin.cis<-round(boot.m1.endIP.first_look$ci.estimates, 2)
+first.fix.bin.cis
+```
+
 
 ### Intercept only model for first look
 ```{r}
 m1.endIP.first_look_interceptonly<-glmer(object_congruent_first_look ~ 1+z.trial+(1+z.trial|subject), family=binomial, data=model.data.end.IP.first.looks, control=glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000000)))
 
-summary(m1.endIP.first_look_interceptonly)
+round(summary(m1.endIP.first_look_interceptonly)$coefficients,3)
 ```
 
 
