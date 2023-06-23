@@ -267,15 +267,16 @@ null1_first_fix2=glmer(first_fix_old_goal ~ z.session_within+agent_first +
             control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 ```
 ```{r}
-install.packages("simr")
+#install.packages("simr")
 library(simr)
-powerSim(mm1_first_fix2, test=compare(null1_first_fix2, method=c("lr")), nsim=10)
+powerSim(mm1_first_fix2, test=compare(null1_first_fix2, method=c("lr")), nsim=1000)
 #we have power of approx. 10% with the effect size we have
 
 model_large <- mm1_first_fix2
 fixef(model_large)['trialtype_agentinanimate'] <- 1.8
 
-powerSim(model_large, test=compare(null1_first_fix2, method=c("lr")), nsim=10)
+res.sim.large<-powerSim(model_large, test=compare(null1_first_fix2, method=c("lr")), nsim=1000)
+res.sim.large
 #1.8 is the beta coefficient linking the predictor variable to the linear predictor (log(6.1)), a large effect size in odds ratio) 
 
 #even with a large effect size, we would have approx. 20% power to detect the fixed effect of agent
