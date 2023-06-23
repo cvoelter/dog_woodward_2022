@@ -436,8 +436,6 @@ write.csv(model_table_ft_al_fam, file = "saves/mm1_ft_al_fam.csv")
 ```
 ## one-sample t-test: compare the onset of the first fixation to the target and distractor object to the reference time when the object starts moving.
 
-##LL: Shouldn't a p-value adjustment be performed here for multiple testing?
-
 ```{r}
 library(broom)
 sample.data.ft.al.ttest<-sample.data.ft.al.agg2  %>%

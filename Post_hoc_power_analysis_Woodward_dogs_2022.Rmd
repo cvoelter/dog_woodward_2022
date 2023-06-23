@@ -105,4 +105,133 @@ plot(x=Effsizes, y=res.effsizes, xlab="Effect sizes", ylab="Sensitivity", cex=1.
 #abline(h=80, lwd=1.5,col="blue")
 ```
 #check if the values of pop.$LT are sensible as looking times
+
+
+
+###values from Cannon & Woodward 2012###
+
+#one-way ANOVA with condition as predictor on the prop. goal objects predictions, 
+#partial eta squared: .27
+#infants were more likely to look at the goal object in the hand then in the claw condition
+
+#obtain cohen's d from partial eta squared:
+#sqrt((nSubj-1)/nSubj*eta_simu$Eta2_partial/(1-eta_simu$Eta2_partial))=
+
+#sqrt((20-1)/20*0.27/(1-0.27)) = 0.59
+
+#infants in the hand
+#condition systematically generated predictive looks to the
+#goal object (M = .65, SD = .28, t(19) = 2.50, p < .05),
+#whereas infants in the claw condition systematically
+#generated predictive looks to the location of the familiarization
+#movements (M = .29, SD = .33, t(19) = 2.85, p = .01).
+#20 infants per condition, 4 trials per infant. I think they used two (two-tailed) t-test against 0.5 (one per condition, claw vs hand)
+
+###values from Kano & Call (2014)###
+
+#22 apes, within-subject, 8 trials (4 per condition/agent)
+#familiarisation: significant interaction between condition (hand/claw) and object (target/distractor) in the reaching phase: apes looked longer at target than distractor in the hand but not in the claw condition
+
+#Test
+
+#looking times to objects
+#apes viewed the target for a longer time than the distractor in the hand condition, t(21) = 2.50, p = .020, Cohen's d = 0.53, but not in the claw condition, t(21) = 1.46, p = .15, Cohen's d = 0.27. Also, there was a significant difference between conditions in viewing time for the target, t(21) = 3.75, p = .001, Cohen's d = 0.80, but not for the distractor, t(21) = 0.68, p = .50, Cohen's d = 0.1
+
+#first looks
+#first look to the target was more frequent in the hand than in the claw condition, t(18) = 2.19, p = .04
+#prop. first looks to target in trial 1 - hand: 0.4
+#prop. first looks to target in trial 1 - claw: 0.62
+#prop. first looks to target in trial 2 - hand: 0.81
+#prop. first looks to target in trial 2 - claw: 0.2
+#prop. first looks to target in trial 3 - hand: 0.8
+#prop. first looks to target in trial 3 - claw: 0.53
+#prop. first looks to target in trial 4 - hand: 0.79
+#prop. first looks to target in trial 4 - claw: 0.5
+
+#numbers inferred from figure S3
+#calculate average across trials:
+#avg.hand<-mean(c(0.4, 0.81, 0.8, 0.79))
+#avg.inanimate<-mean(c(0.62, 0.2, 0.53, 0.5))
+
+#cohen's d assuming a sd of 0.10 as in the following study with infants=
+#(avg.hand-avg.inanimate)/0.10 = 2.38 # a very high effect size
+
+###Values from Daum et al. 2012 (Exp. 1)
+#24 infants
+#3 test trials per condition (3 old goal, 3 old location) but only the first trial was analysed for predictive looks
+#25% of infants (sd 9%) looked at the old identity object, 37.5% of them looked at the old side object on the first trial (sd 10.1%)
+
+#cohen's d =
+#(0.38-0.25)/0.10 = 1.3
+
+###Values from Krogh-Jespersen 2018 (Exp. 1)###
+#20 infants, 2 trials per infant, excluded 6 trials in which no anticipation.
+#infants were equally likely to look at the old goal or old location obejct
+#(on 17/34 trials looked first at old identity)
+
+#hence, reasonable effect sizes to simulate are "0", 0.5, 1 and 2
+
+
+#we used a binomial model that yielded complete separation when we did not include trials in which the dogs never looked at any of the objects during the anticipation IP
+```{r}
+#set up a dataframe corresponding to the experimental design - Woodward dogs 2022
+nr.subj= 19 #sample size
+nr.trials= 4 #(2 conditions and 2 agents)
+n.data.points= nr.subj*nr.trials
+
+#create predictors and random effects
+set.seed(2)
+subject=rep(1:nr.subj, nr.trials) 
+subject<-as.factor(sort(subject, decreasing=FALSE))
+condition=rep(c("new goal", "new side"), n.data.points/2)
+condition.dummy=ifelse(condition=="new goal", 1,0)
+agent=sample(c("human", "inanimate"), n.data.points, replace=T)
+agent.dummy=ifelse(agent=="human", 1,0)
+#agent_first=ifelse(subject%in%c("1", "3", "4", "6", "7", "13", "16", "17", "18", "19"),"human","inanimate") #this would work for the sample but not the population
+agent_first=ifelse(as.numeric(subject)%%2 ==0, "human", "inanimate") #based on whether subject has an odd or even ID
+session.nr=rep(1:4,nr.subj)
+
+population<- data.frame(subject, session.nr, condition, agent, agent_first)
+
+#prepare data for model
+population$z.session<-as.vector(scale(population$trial.nr, center = TRUE, scale=TRUE))
+population$condition.c = as.vector(scale(
+  as.numeric(
+    population$condition == levels(as.factor(
+      population$condition
+    ))[2]
+  ),
+  center = TRUE,
+  scale = FALSE
+))
+levels(as.factor(population$condition.c))
+
+population$agent <-
+  as.factor(population$agent)
+levels(population$agent)
+
+population$agent.c = as.vector(scale(
+  as.numeric(
+    population$agent == levels(as.factor(population$agent))[2]
+  ),
+  center = TRUE,
+  scale = FALSE
+))
+
+population$agent_first.c = as.vector(scale(
+  as.numeric(population$agent_first == levels(
+    as.factor(population$agent_first)
+  )[2]),
+  center = TRUE,
+  scale = FALSE
+))
+
+#create a response variable
+
+mm1_first_fix=glmer(first_fix_old_goal ~ trialtype_agent + z.session_within + agent_first +
+            (1+trialtype_agent.c + z.session_within|subject),
+             data=first4s.data.first.fix, family=binomial, 
+            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 ```
+
+

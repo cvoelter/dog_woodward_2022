@@ -387,9 +387,9 @@ plot.woodward.pupil.group <- ggplot(data = pupil.group.level, aes(x = bin_low, y
   xlim(3000, 8001) +
     theme_bw()+
   scale_color_manual(values = wes_palette("Zissou1")[c(1, 4)],
-                     labels = c("New goal", "New side")) +
+                     labels = c("New identity", "New side")) +
   scale_fill_manual(values = wes_palette("Zissou1")[c(1, 4)],
-                    labels = c("New goal", "New side")) +
+                    labels = c("New identity", "New side")) +
   guides(colour = guide_legend(override.aes = list(size=2)))+
   theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank(),
