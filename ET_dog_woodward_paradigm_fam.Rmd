@@ -22,11 +22,10 @@ source("./functions/glmmTMB_stability.r")
 source("./functions/boot_glmmTMB.r")
 source("./functions/extract_ranef_gmmTMB.r")
 
-#load("./workspaces/ET_dog_woodward_kano_paradigm_familiarisation.RData")
+load("./workspaces/ET_dog_woodward_kano_paradigm_familiarisation.RData")
 
 ```
 Find the first look to object after first look at agent. Delete samples before the agent was looked at. Agent starts moving immediately (327 ms into the video) in these videos, hence we only delete samples preceding the first look to the agent, but not samples before the agent starts moving.
-#LL:agent start time should be deleted from all occurrences in this script
 
 Find duration of first fam trial only, to only retain time < than that: 2300
 agent_arrival_time<-1200 #this is the overlap between hand and object, check if overlap between hand and object AOI happens earlier 
@@ -44,7 +43,7 @@ demo.data <- read_csv("data/Woodward_Kano_ counterbalancing.csv")%>%
 ```
 load sample data and add the demographic data
 ```{r}
-sample.data<-read.delim("data/dog_woodward_paradigm_sample_report_with_agents_AOIs.txt")
+sample.data<-read_parquet("data/dog_woodward_paradigm_Sample_Report_with_agents_AOIs.parquet")
 levels(as.factor(sample.data$RECORDING_SESSION_LABEL))
 str(sample.data)
 
