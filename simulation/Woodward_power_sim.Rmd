@@ -77,7 +77,7 @@ range(apply(X = xx > 0, MARGIN = 1, sum))
 ## Simulation
 
 ```{r eval=FALSE, include=FALSE}
-n.simus <- 20 # small number for testing
+n.simus <- 1000 # small number for testing
 r.effects <- c(0.9) # random effects to be simulated
 # with the intercept being -0.9 (qlogis(0.29)) we could make the following
 # guesses for the random intercept:
