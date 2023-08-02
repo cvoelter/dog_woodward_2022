@@ -43,7 +43,7 @@ demo.data <- read_csv("data/Woodward_Kano_ counterbalancing.csv")%>%
 ```
 load sample data and add the demographic data
 ```{r}
-sample.data<-read_parquet("data/dog_woodward_paradigm_Sample_Report_with_agents_AOIs.parquet")
+sample.data<-read_parquet("data/dog_woodward_paradigm_Sample_Report_with_agents_AOIs_test.parquet")
 levels(as.factor(sample.data$RECORDING_SESSION_LABEL))
 str(sample.data)
 
@@ -142,7 +142,7 @@ t.test(location_pref_data$lower_IA_large, location_pref_data$upper_IA_large, pai
 table(sample.data.ft$subject, sample.data.ft$target)
 ```
 
-###LL: These videos are not perfectly synchronised: the claw visually overlaps with the objects sooner than the hand. The claw reaching up is faster than the calw reaching down etc. I initially chose video frame 39 as in all conditions the agent already visually overlaps with the object but the action is not completed yet. An alternative could be frame 30 which is very conservative for the claw down.
+###LL: These videos are not perfectly synchronised: the claw visually overlaps with the objects sooner than the hand. But the hand makes contact with the object sooner. The claw reaching up is faster than the calw reaching down etc. I chose video frame 39 as in all conditions the agent already visually overlaps with the object but the action is not completed yet. An alternative could be frame 30 which is very conservative for the claw down.
 
 identify the time points when the video frame, in which object starts moving after being pushed by agent, is shown
 ```{r}
@@ -188,30 +188,7 @@ sample.data.ft.al.agg<- sample.data.ft.al%>%
 
 summary(sample.data.ft.al.agg$first_object_look)
 ```
-plot the distribution of first object looks
-```{r}
-sample.data.ft.al.agg2 <- sample.data.ft.al.agg %>%
-  group_by(subject, condition, AoI) %>%
-  filter(AoI %in% c("target", "distractor"))%>% 
-  summarise(mean_first_object_look = mean(first_object_look))
-
-fam_gat_dt<-ggplot(sample.data.ft.al.agg2, aes(x=AoI, y = mean_first_object_look)) +
-  facet_wrap(~condition)+
-  ylab("Mean gaze arrival time to objects relative to agent (ms)")+
-  xlab("Object")+
-  geom_boxplot(outlier.color = "white")+
-  geom_hline(yintercept=0, linetype='dashed', col = 'red')+
-  geom_count(alpha=0.4)+
-  geom_line(aes(group=subject), lty=2, color="grey")+
-  theme_bw()+
-  theme(axis.text=element_text(size=12))
-
-fam_gat_dt
-
-ggsave(fam_gat_dt, filename= "graphs/Exp_1_fam_gat_.png", height=6, width=10, scale=0.7, dpi=1200)
-
-```
-plot the distribution of first object looks, with different panels, jittered points and significance levels
+plot the distribution of first object looks, with jittered points and significance levels
 ```{r}
 sample.data.ft.al.agg.target <- sample.data.ft.al.agg %>%
   group_by(subject, condition, AoI) %>%
@@ -293,7 +270,7 @@ xx.fe.re=fe.re.tab(fe.model="first_object_look ~ condition + condition_first + z
 re="(1|subject)", data=sample.data.ft.al.target)
 xx.fe.re$summary
 
-table(sample.data.ft.al.target$condition, sample.data.ft.al.target$subject )
+table(sample.data.ft.al.target$condition, sample.data.ft.al.target$subject)
 ```
 
 fit model (testing the latency of the first look to the target object in the first familiarisation trial)
@@ -391,7 +368,7 @@ sample.data.ft.al.ttest<-sample.data.ft.al.agg2  %>%
   mutate(ttest = map(ttest, tidy)) %>%
   unnest(cols = c(ttest))
 
-sample.data.ft.al.ttest$corrected_P<-p.adjust(sample.data.ft.al.ttest$p.value, method = "holm", n = length(sample.data.ft.al.ttest$p.value))#when agent is claw, significantly predicitve looks to distractor
+sample.data.ft.al.ttest$corrected_P<-p.adjust(sample.data.ft.al.ttest$p.value, method = "holm", n = length(sample.data.ft.al.ttest$p.value))#when agent is claw, significantly predictive looks to distractor
 #BH=Benjamini & Hochberg (1995) method
 
 ```
