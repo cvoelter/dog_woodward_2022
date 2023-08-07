@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(summarytools)
 library(lme4)
+library(wesanderson)
 
 source("./functions/diagnostic_fcns.r")
 source("./functions/glmm_stability.r")
@@ -25,7 +26,7 @@ load("workspaces/AL_test_first4s.RData")
 ```
 
 ```{r}
-save.image("workspaces/AL_test_first4s.RData")
+#save.image("workspaces/AL_test_first4s.RData")
 ```
 
 
@@ -259,30 +260,7 @@ mm1_first_fix2=glmer(first_fix_old_goal ~ trialtype_agent+z.session_within+agent
             control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 
 summary(mm1_first_fix2)
-
-#null model for power analysis
-null1_first_fix2=glmer(first_fix_old_goal ~ z.session_within+agent_first +
-            (1|subject)+(0+trialtype_agent.c|subject),
-             data=first4s.data.first.fix, family=binomial, 
-            control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 ```
-```{r}
-#install.packages("simr")
-library(simr)
-powerSim(mm1_first_fix2, test=compare(null1_first_fix2, method=c("lr")), nsim=1000)
-#we have power of approx. 10% with the effect size we have
-
-model_large <- mm1_first_fix2
-fixef(model_large)['trialtype_agentinanimate'] <- 1.8
-
-res.sim.large<-powerSim(model_large, test=compare(null1_first_fix2, method=c("lr")), nsim=1000)
-res.sim.large
-#1.8 is the beta coefficient linking the predictor variable to the linear predictor (log(6.1)), a large effect size in odds ratio) 
-
-#even with a large effect size, we would have approx. 20% power to detect the fixed effect of agent
-```
-
-
 
 ```{r}
 
@@ -394,18 +372,19 @@ ggsave(filename="graphs/AL_NAs_included.png",
 
 
 ```{r}
-first4s.data.first.fix.nolooked.included.se.long <- first4s.data.first.fix.nolooked.included.agg %>%
-  select(trialtype_agent, session_withinagent, first_fix_old_goal = first_fix_old_goal_se, first_fix_old_side = first_fix_old_side_se) %>%
-  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "se.dogs")
+#LL: not needed?
+# first4s.data.first.fix.nolooked.included.se.long <- first4s.data.first.fix.nolooked.included.agg %>%
+#   select(trialtype_agent, session_withinagent, first_fix_old_goal = first_fix_old_goal_se, first_fix_old_side = first_fix_old_side_se) %>%
+#   pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "se.dogs")
 
 first4s.data.first.fix.nolooked.included.agg.long <- first4s.data.first.fix.nolooked.included.agg %>%
   select(trialtype_agent, session_withinagent, first_fix_old_goal = first_fix_old_goal_mean, first_fix_old_side = first_fix_old_side_mean) %>%
-  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "prop.dogs") %>%
-  full_join(first4s.data.first.fix.nolooked.included.se.long)
+  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "prop.dogs") #%>%
+  #full_join(first4s.data.first.fix.nolooked.included.se.long)
 
 al_plot_NAs_included2<-ggplot(first4s.data.first.fix.nolooked.included.agg.long, aes(x = trialtype_agent, y = prop.dogs, fill = AoI)) +
   geom_bar(stat="identity", position = position_dodge(0.9), alpha=0.8) + 
-  geom_errorbar(aes(ymin = prop.dogs - se.dogs, ymax = prop.dogs + se.dogs), width = 0.2, position = position_dodge(0.9))+
+  #geom_errorbar(aes(ymin = prop.dogs - se.dogs, ymax = prop.dogs + se.dogs), width = 0.2, position = position_dodge(0.9))+
   facet_wrap(~session_withinagent)+
   ylim(0,0.5)+
   ylab("Prop. dogs")+
@@ -418,11 +397,9 @@ new side","old side -
 new identity"))
 
 al_plot_NAs_included2
-
-
 ```
 ```{r}
-ggsave(filename="graphs/AL_NAs_excluded_AOIs.png",
+ggsave(filename="graphs/AL_NAs_included_AOIs.png",
   plot = al_plot_NAs_included2,
   width=8.5,
   height=5,
@@ -529,7 +506,7 @@ mm1_first_fix2_withoutNAs_output_table <-
 write.csv(mm1_first_fix2_withoutNAs_output_table, file = "saves/mm1_first_fix2_withoutNAs_output_table.csv")
 ```
 
-## Plot showing the object looks in the first 4 s of the test trials (without dogs that did not look not at any of the objects in a given trial)
+## Prepare the data for plot showing the object looks in the first 4 s of the test trials (without dogs that did not look not at any of the objects in a given trial)
 ```{r}
 first4s.data.first.fix.agg<-first4s.data.first.fix %>%
   group_by(trialtype_agent, agent_first, session_withinagent) %>%
@@ -543,18 +520,31 @@ first4s.data.first.fix.agg<-first4s.data.first.fix %>%
 
 ```{r}
 first4s.data.first.fix.agg2<-first4s.data.first.fix %>%
-  group_by(trialtype_agent) %>%
+  group_by(trialtype_agent,session_withinagent) %>%
   summarise(first_fix_old_goal_mean = mean(first_fix_old_goal_withoutNA, na.rm=TRUE), 
             first_fix_old_goal_sum = sum(first_fix_old_goal_withoutNA==1, na.rm=TRUE), #number of dogs that anticipated the old goal object
-            first_fix_old_side_sum = sum(first_fix_old_goal_withoutNA==0, na.rm=TRUE), #number of dogs that anticipated the old side object
-            first_fix_old_goal_count = sum(!is.na(first_fix_old_goal_withoutNA)))#number of dogs that looked at at least one of the objects
+            first_fix_old_goal_count = sum(!is.na(first_fix_old_goal_withoutNA)),#number of dogs that looked at at least one of the objects
+            first_fix_old_side_sum = sum(first_fix_old_side_withoutNA==0, na.rm=TRUE), #number of dogs that anticipated the old side object
+            first_fix_old_side_mean=mean(first_fix_old_side_withoutNA, na.rm=TRUE),
+            first_fix_old_side_count = sum(!is.na(first_fix_old_side_withoutNA)))#number of dogs that looked at at least one of the objects)
 
-#LL: I think these binomial tests can be removed as they were run on the wrong data (multiple observations from the same subjects), and can be replaced by the McNemar test, right?
-#binomial test for
-#human agent
-binom.test(x = first4s.data.first.fix.agg2$first_fix_old_goal_sum[1] , first4s.data.first.fix.agg2$first_fix_old_goal_count[1] )
-#and for inanimate agent
-binom.test(x = first4s.data.first.fix.agg2$first_fix_old_goal_sum[2] , first4s.data.first.fix.agg2$first_fix_old_goal_count[2] )
+first4s.data.first.fix.nolooked.excluded.agg.long <- first4s.data.first.fix.agg2 %>%
+  select(trialtype_agent, session_withinagent, first_fix_old_goal = first_fix_old_goal_mean, first_fix_old_side = first_fix_old_side_mean) %>%
+  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "prop.dogs") 
+
+al_plot_NAs_excluded2<-ggplot(first4s.data.first.fix.nolooked.excluded.agg.long, aes(x = trialtype_agent, y = prop.dogs, fill = AoI)) +
+  geom_bar(stat="identity", position = position_dodge(0.9), alpha=0.8) + 
+  #geom_errorbar(aes(ymin = prop.dogs - se.dogs, ymax = prop.dogs + se.dogs), width = 0.2, position = position_dodge(0.9))+
+  facet_wrap(~session_withinagent)+
+  ylim(0,0.5)+
+  ylab("Prop. dogs")+
+  xlab("Agent")+
+  theme(axis.text = element_text(size = 14))+  #axis text size 
+  theme(axis.title = element_text(size = 16)) +
+  theme_bw() +
+  scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("old identity - 
+new side","old side - 
+new identity"))
 ```
 
 ```{r}
@@ -577,6 +567,9 @@ ggsave(filename="graphs/AL_plot_NAs_excluded.png",
        #scale=0.55,
        dpi=1200)
 ```
+
+
+
 
 ## intercept only model (to test whether the dogs have a preference for the new goal in either condition) 
 
@@ -677,12 +670,11 @@ vif(xx)
 Individual fixed effects
 ```{r}
 summary(mm1.latency)
-#drop1(mm1.latency, test = "Chisq") can be deleted?
 library(lmerTest)
 
 mm1.latency.reml<-lmerTest::lmer(latency ~ IA * trialtype_agent +
             (1|subject), data=first4s.data.latency.first.fix.long, REML=TRUE)
-summary(mm1.latency.reml)
+summary(mm1.latency.reml)$coefficients
 #in the inanimate condition, dogs' latency to look at the old side is lower than in the human condition
 
 ```
@@ -696,7 +688,11 @@ library(ggbeeswarm)
 library(ggsignif)
 library(vipor)
 
-latency_AL_AOIs_plot<-ggplot(first4s.data.latency.first.fix.long.agg, aes(x = trialtype_agent, y = mean_latency, fill = AoI)) +
+#old plot without lines connecting subjects
+latency_AL_AOIs_plot
+
+#new plot with lines connecting subjects
+latency_AL_AOIs_plot_lines<-ggplot(first4s.data.latency.first.fix.long.agg, aes(x = trialtype_agent, y = mean_latency, fill = AoI)) +
   geom_boxplot(position = position_dodge(0.8), alpha=0.8, outlier.colour = "white") +
   #scale_fill_viridis(discrete = TRUE,  option = "viridis", begin=0.25, labels= c("old side","old goal"))+
   #scale_fill_manual(values=wes_palette("IsleofDogs1"), labels= c("old side","old goal"))+
@@ -705,7 +701,7 @@ new side","old side -
 new identity"))+
   #scale_fill_manual(values=wes_palette("FantasticFox1")[c(3,4)], labels= c("old side","old goal"))+
   #scale_fill_manual(values=wes_palette("Royal1")[c(2,1)], labels= c("old side","old goal"))+
-  geom_quasirandom(method = "pseudorandom", width=0.2, dodge.width=.8, alpha=.4, size=2)+
+  geom_quasirandom(method = "pseudorandom", width=0.1, dodge.width=.8, alpha=.4, size=2)+
   #geom_jitter(width=0.1, alpha=.4, size=2)+
   #geom_jitter(position = position_dodge(0.8), alpha=.4, size=2)+
   #scale_fill_manual(values=c("dodgerblue", "darkorange"), labels= c("old side","old goal"))+
@@ -717,14 +713,15 @@ new identity"))+
               y_position = 200, tip_length = 0.01)+
   geom_signif(xmin=1.8, xmax=2.2, annotations="*", #LMM relevelled so that inanimate is the reference category, test of fixed effect of AoI (involved in interaction)
               y_position = -50, tip_length = 0.01)+
+  geom_line(aes(group=subject), linewidth=.5, lty =2, color="grey", alpha=.9)+
   theme_bw()+
   theme(axis.text=element_text(size=12))+
   theme(axis.title=element_text(size=12))
-latency_AL_AOIs_plot
+latency_AL_AOIs_plot_lines
 ```
 ```{r}
-ggsave(filename="graphs/latency_AL_AOIs2.png",
-  plot = latency_AL_AOIs_plot,
+ggsave(filename="graphs/latency_AL_AOIs2_lines.png",
+  plot = latency_AL_AOIs_plot_lines,
   width=10,
   height=6,
   scale=0.55,

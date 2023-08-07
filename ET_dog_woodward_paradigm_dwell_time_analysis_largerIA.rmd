@@ -312,7 +312,7 @@ round(boot.m1.endIP.largeIA$ci.estimates$fe[1:5,],2)
 ```
 
 
-The results of the dwell time analysis of the end IP show no difference between the hand or claw condition with respect to the looking times to the grasped object. Dogs showed a preference to look at the upper location (evidenced by a significant target location effect).
+The results of the dwell time analysis of the end IP show no difference between the hand or claw condition with respect to the looking times to the grasped object. Dogs showed a preference to look at the old identity object when this was in the upper location (evidenced by a significant target location effect).
 
 ### Intercept only model for proportion congruent object dwell time
 ```{r}
@@ -331,7 +331,7 @@ m1.endIP.largeIA_interceptonly<-glmmTMB(prop.dwell.scaled2 ~  z.trial+(1+z.trial
 round(summary(m1.endIP.largeIA_interceptonly)$coefficients$cond,3)
 ```
 
-### first look analysis (binary)
+### first fixation analysis (binary)
 ```{r}
 model.data.end.IP.first.looks<-end.ip.first.look%>%
   mutate(z.trial=scale(trial_within_block, center = TRUE, scale=TRUE),
@@ -380,6 +380,132 @@ m1.endIP.first_look_interceptonly<-glmer(object_congruent_first_look ~ 1+z.trial
 
 round(summary(m1.endIP.first_look_interceptonly)$coefficients,3)
 ```
+
+###First fixation to incongruent object (binary model)
+```{r}
+end.ip.first.look.incongr <- end.ip.data %>%
+  select(
+    subject,
+    session.num,
+    condition_trial,
+    IP_LABEL,
+    IA_LABEL,
+    condition,
+    condition_first,
+    target,
+    target_location,
+    session,
+    trial_within_block,
+    video_file,
+    video_latency,
+    DATA_FILE,
+    IA_FIRST_FIXATION_TIME
+  ) %>%
+  pivot_wider(names_from = IA_LABEL, values_from = IA_FIRST_FIXATION_TIME) %>%
+  mutate(
+    upper_IA_large = as.numeric(upper_IA_large),
+    lower_IA_large = as.numeric(lower_IA_large)
+  ) %>% 
+ mutate(first_look = ifelse((
+    upper_IA_large < lower_IA_large |
+      (!is.na(upper_IA_large) & is.na(lower_IA_large))
+  ), "upper", "NA")) %>%
+  mutate(first_look2 = ifelse((
+    lower_IA_large < upper_IA_large |
+      (!is.na(lower_IA_large) & is.na(upper_IA_large))
+  ), "lower", "NA")) %>% 
+
+  mutate(first_look3=coalesce(first_look, first_look2)) %>% 
+  # mutate(first_look3 = ifelse(
+  #   first_look=="upper",
+  #   first_look,
+  #   ifelse(
+  #     first_look!="uppper",
+  #     first_look2, 
+  #     "NA"
+  #   )
+  # ))
+  # mutate(first_look3a = as.character(ifelse(
+  #   !is.na(first_look),
+  #   first_look, 
+  #   "NA"))) %>%
+  # mutate(first_look3b = as.character(ifelse(
+  #   !is.na(first_look2),
+  #   first_look2,"NA"))) %>%
+  # mutate(first_look3 = ifelse(
+  #  !is.na(first_look3a),
+  #  first_look3a,
+  #  ifelse(
+  #    !is.na(first_look3b),
+  #    first_look3b, "NaN"))) %>% 
+  # #mutate(first_look3 = as.character(coalesce(first_look3a, first_look3b)))%>% 
+  mutate(object_incongruent_first_look = as.numeric(ifelse((target_location ==
+                                                            "up" &
+                                                            first_look3 == "lower"),
+                                                         0,
+                                                         ifelse((target_location == "down" &
+                                                                   first_look3 == "upper"),
+                                                                0,
+                                                                ifelse((target_location == "up" &
+                                                                          first_look3 == "upper"),
+                                                                       1,
+                                                                       ifelse((
+                                                                         target_location == "down" & first_look3 == "lower"
+                                                                       ), 1, NA)
+                                                                )
+                                                         )
+  )),
+  object_incongruent_first_look_noNA = as.numeric(ifelse(is.na(first_look3),0, object_incongruent_first_look )))
+
+summary(end.ip.first.look.incongr$object_incongruent_first_look_noNA)
+
+#manually replacing Nas that were not automatically scored correctly
+end.ip.first.look.incongr[c(67,97),"object_incongruent_first_look_noNA"] <-0
+ 
+summary(end.ip.first.look.incongr$object_incongruent_first_look_noNA)
+```
+
+```{r}
+model.data.end.IP.first.look.incongr<-end.ip.first.look.incongr%>%
+  mutate(z.trial=scale(trial_within_block, center = TRUE, scale=TRUE),
+         condition.c=scale(as.numeric(as.factor(condition)), center = TRUE, scale=FALSE))
+
+summary(model.data.end.IP.first.look.incongr)
+
+
+m1.endIP.first_look.incongr<-glmer(object_incongruent_first_look_noNA ~ condition + z.trial + condition_first+ target_location+(1+condition.c+z.trial|subject), family=binomial, data=model.data.end.IP.first.look.incongr, control=glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000000)))
+
+round(summary(m1.endIP.first_look.incongr)$coefficients,2)
+```
+
+```{r}
+drop1_m1.first.look.incongr<-drop1(m1.endIP.first_look.incongr, test="Chisq")
+round(drop1_m1.first.look.incongr,3)
+```
+####assumptions and stability first fix incongr obj
+```{r}
+#BLUPs
+ranef.diagn.plot(m1.endIP.first_look.incongr)
+
+#Stability
+stab.m1.endIP.first_look.incongr=glmm.model.stab(model.res=m1.endIP.first_look.incongr,
+contr=glmerControl(optimizer="bobyqa",
+optCtrl=list(maxfun=10000)))
+
+round(stab.m1.endIP.first_look.incongr$summary[1:5, -1],2)
+m.stab.plot(stab.m1.endIP.first_look.incongr$summary[, -1])
+```
+####CIs binomial model first fixation incongr obj
+```{r}
+boot.m1.endIP.first_look.incongr=boot.glmm.pred(model.res=m1.endIP.first_look.incongr,
+nboots=1000, para=T, resol=1000, level=0.95,
+use=NULL, n.cores="all-1")
+
+first.fix.incongr.bin.cis<-round(boot.m1.endIP.first_look.incongr$ci.estimates, 2)
+first.fix.incongr.bin.cis
+```
+
+
 
 
 
