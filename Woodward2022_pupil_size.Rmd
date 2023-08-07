@@ -386,10 +386,10 @@ plot.woodward.pupil.group <- ggplot(data = pupil.group.level, aes(x = bin_low, y
   geom_ribbon(aes(ymin = mean.pupil.corrected.binned - se.pupil.corrected.binned, ymax = mean.pupil.corrected.binned + se.pupil.corrected.binned, fill = condition), alpha = 0.7) +
   xlim(3000, 8001) +
     theme_bw()+
-  scale_color_manual(values = wes_palette("Zissou1")[c(1, 4)],
-                     labels = c("New identity", "New side")) +
-  scale_fill_manual(values = wes_palette("Zissou1")[c(1, 4)],
-                    labels = c("New identity", "New side")) +
+  scale_color_manual(values = wes_palette("Zissou1")[c(4, 1)],
+                     labels = c("old side - new identity", "old identity - new side")) +
+  scale_fill_manual(values = wes_palette("Zissou1")[c(4, 1)],
+                    labels = c("old side - new identity", "old identity - new side")) +
   guides(colour = guide_legend(override.aes = list(size=2)))+
   theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank(),
@@ -397,7 +397,7 @@ plot.woodward.pupil.group <- ggplot(data = pupil.group.level, aes(x = bin_low, y
         panel.grid.minor.y = element_blank(),
         legend.title = element_blank(), 
         #legend.position = "bottom",
-        legend.position = c(0.92, 0.92), 
+        legend.position = c(0.87, 0.92), 
         legend.margin = margin(0.1,0.1,0.01,0.1),
         legend.text=element_text(size=8),
         legend.key.size = unit(0.4, 'cm'),
@@ -407,7 +407,7 @@ plot.woodward.pupil.group <- ggplot(data = pupil.group.level, aes(x = bin_low, y
 
 plot.woodward.pupil.group
 
-ggsave(plot.woodward.pupil.group, filename = "graphs/pupil_group_condition.png", height = 5, width = 10, scale = 0.7, dpi=600)
+ggsave(plot.woodward.pupil.group, filename = "graphs/pupil_group_condition3.png", height = 5, width = 10, scale = 0.7, dpi=600)
 ```
 
 #GAMM
