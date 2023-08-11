@@ -77,7 +77,7 @@ range(apply(X = xx > 0, MARGIN = 1, sum))
 ## Simulation
 
 ```{r eval=FALSE, include=FALSE}
-n.simus <- 1000 # small number for testing
+n.simus <- 1000 
 r.effects <- c(0.9) # random effects to be simulated
 # with the intercept being -0.9 (qlogis(0.29)) we could make the following
 # guesses for the random intercept:
@@ -90,7 +90,7 @@ r.slope.con <- c(1.5, 3)
 #- 0.9: moderate random slopes effect
 
 
-r.slope.trial <- 0.1
+#r.slope.trial <- 0.1
 
 
 # create object to store the simulation parameters and results:
@@ -188,7 +188,7 @@ save.image("power_sim_woodward_N19.RData")
 Full model:  
 ```{r echo=FALSE}
 #full model
-tapply(X=all.res[, "warns.full"]>0, INDEX=all.res[, c("r.slope.con", "r.effect")],
+tapply(X=all.res[, "warns.full"]>0, INDEX=all.res[, c("hand.per", "claw.per", "r.slope.con")],
 FUN=sum)
 #warning codes: 
 #363: unable to evaluate scaled gradient. Model failed to converge: degenerate  Hessian with 1 negative eigenvalues
@@ -246,6 +246,7 @@ lrt.data2 <- all.res2 %>%
             proportion.sign.lrt.trial = length(lrt.p.trial[lrt.p.trial < 0.05]) / n.simus)
 
 lrt.data2
+write.table(lrt.data2, file = "post_hoc_power_table.txt", sep = ",", quote = FALSE, row.names = T)
 ```
 
 #### Plotting the proportion of significant LRTs for the predictor variable condition ONLY based on models that converged and with a significant full-null model comparison
