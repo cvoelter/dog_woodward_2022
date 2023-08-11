@@ -245,7 +245,7 @@ ggsave(fam_ft_gat, filename= "graphs/Exp1_fam_gat_grid.png", height=5, width=7, 
 
 ```
 
-## preregistered analysis
+## Latency of first look to objects during fam -- target
 
 ```{r}
 sample.data.ft.al.target <- sample.data.ft.al.agg %>%
@@ -266,7 +266,7 @@ sample.data.ft.al.target$condition.c <-
 ```
 
 ```{r}
-xx.fe.re=fe.re.tab(fe.model="first_object_look ~ condition + condition_first + z.session",
+xx.fe.re=fe.re.tab(fe.model="first_object_look ~ condition + condition_first + z.session + target_location",
 re="(1|subject)", data=sample.data.ft.al.target)
 xx.fe.re$summary
 
@@ -276,7 +276,7 @@ table(sample.data.ft.al.target$condition, sample.data.ft.al.target$subject)
 fit model (testing the latency of the first look to the target object in the first familiarisation trial)
 ```{r}
 
-mm1.ft.al<-lme4::lmer(first_object_look ~ condition + condition_first + z.session +
+mm1.ft.al<-lme4::lmer(first_object_look ~ condition + condition_first + z.session + target_location+
             (1+z.session|subject), data=sample.data.ft.al.target, REML=FALSE)
 
 ```
@@ -289,7 +289,7 @@ ranef.diagn.plot(mm1.ft.al)
 collinearity 
 ```{r}
 library(car)
-xx<-lm(first_object_look ~ condition + condition_first + z.session,
+xx<-lm(first_object_look ~ condition + condition_first + z.session + target_location,
              data=sample.data.ft.al.target, REML=FALSE)
 vif(xx)
 ```
@@ -297,13 +297,13 @@ vif(xx)
 
 Individual fixed effects
 ```{r}
-summary(mm1.ft.al)$coefficients
+round(summary(mm1.ft.al)$coefficients,2)
 
 library(lmerTest)
 
 mm1.ft.al.reml <-
   lmerTest::lmer(
-    first_object_look ~ condition + condition_first + z.session +
+    first_object_look ~ condition + condition_first + z.session + target_location +
       (1 + z.session |
          subject),
     data = sample.data.ft.al.target,
@@ -311,7 +311,7 @@ mm1.ft.al.reml <-
   )
 summary(mm1.ft.al.reml)
 
-#no significant difference between agents when looking at the target during the first fam trial (df=32.480, t value=0.571, P=0.572)
+#no significant difference between agents when looking at the target during the first fam trial (df=32.16, t value=0.62, P=0.540)
 
 ```
 
@@ -347,9 +347,9 @@ m.stab.plot(boot.full.mm1.ft.al$ci.estimates)
 ###Output table: latency - target
 ```{r}
 model_table_ft_al_fam<- bind_cols(as.data.frame(summary(mm1.ft.al)$coefficients),
-                            boot.full.mm1.ft.al$ci.estimates[1:4,],
+                            boot.full.mm1.ft.al$ci.estimates[1:5,],
                             summary(mm1.ft.al.reml)$coefficients,
-                            full.stab.mm1.ft.al$summary[1:4, -1])%>% 
+                            full.stab.mm1.ft.al$summary[1:5, -1])%>% 
   select(Estimate=`Estimate...1`, SE = `Std. Error...2`, LowerCI = X2.5., UpperCI = X97.5.,t=`t value...10`, Df=`df`, p=`Pr(>|t|)`, `min`, `max`) %>%
   mutate(across(.cols = c(p), ~ format(round(.x, 3), nsmall=3))) %>% 
   mutate(across(.cols = c(Estimate:Df, min, max), ~ format(round(.x, 2), nsmall=2))) %>% 
@@ -390,7 +390,7 @@ sample.data.ft.al.distractor$z.session <- as.vector(scale(sample.data.ft.al.dist
 ```
 
 ```{r}
-xx.fe.re=fe.re.tab(fe.model="first_object_look ~ condition + condition_first + z.session",
+xx.fe.re=fe.re.tab(fe.model="first_object_look ~ condition + condition_first + z.session + target_location",
 re="(1|subject)", data=sample.data.ft.al.distractor)
 xx.fe.re$summary
 
@@ -400,7 +400,7 @@ table(sample.data.ft.al.distractor$condition, sample.data.ft.al.distractor$subje
 fit model (testing the latency of the first look to the distractor object in the first familiarisation trial)
 ```{r}
 
-mm1.ft.al.distractor<-lme4::lmer(first_object_look ~ condition + condition_first + z.session +
+mm1.ft.al.distractor<-lme4::lmer(first_object_look ~ condition + condition_first + z.session + target_location +
             (1+z.session|subject), data=sample.data.ft.al.distractor, REML=FALSE)
 
 ```
@@ -413,7 +413,7 @@ ranef.diagn.plot(mm1.ft.al.distractor)
 collinearity 
 ```{r}
 library(car)
-xx<-lm(first_object_look ~ condition + condition_first + z.session,
+xx<-lm(first_object_look ~ condition + condition_first + z.session + target_location,
              data=sample.data.ft.al.distractor, REML=FALSE)
 vif(xx)
 ```
@@ -427,13 +427,13 @@ library(lmerTest)
 
 mm1.ft.al.distractor.reml <-
   lmerTest::lmer(
-    first_object_look ~ condition + condition_first + z.session +
+    first_object_look ~ condition + condition_first + z.session + target_location +
       (1 + z.session | subject),
     data = sample.data.ft.al.distractor,
     REML = TRUE
   )
 summary(mm1.ft.al.distractor.reml)
-#no significant difference in gaze arrival times to distractor between agents(df=18.946, t value= 1.188, P=0.2494)
+#no significant difference in gaze arrival times to distractor between agents(df=19.05, t value= 1.15, P=0.263)
 
 ```
 
@@ -469,9 +469,9 @@ m.stab.plot(boot.full.mm1.ft.al.distractor$ci.estimates)
 ###Output table: latency - distractor
 ```{r}
 model_table_ft_al_fam.distractor<- bind_cols(as.data.frame(summary(mm1.ft.al.distractor)$coefficients),
-                            boot.full.mm1.ft.al.distractor$ci.estimates[1:4,],
+                            boot.full.mm1.ft.al.distractor$ci.estimates[1:5,],
                             summary(mm1.ft.al.distractor.reml)$coefficients,
-                            full.stab.mm1.ft.al.distractor$summary[1:4, -1])%>% 
+                            full.stab.mm1.ft.al.distractor$summary[1:5, -1])%>% 
   select(Estimate=`Estimate...1`, SE = `Std. Error...2`, LowerCI = X2.5., UpperCI = X97.5.,t=`t value...10`, Df=`df`, p=`Pr(>|t|)`, `min`, `max`) %>%
   mutate(across(.cols = c(p), ~ format(round(.x, 3), nsmall=3))) %>% 
   mutate(across(.cols = c(Estimate:Df, min, max), ~ format(round(.x, 2), nsmall=2))) %>% 
