@@ -1,0 +1,244 @@
+---
+title: "Figure AL exp.1+2"
+author: "Lucrezia Lonardo"
+date: "29/08/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+rm(list=ls())
+library(cowplot)
+library(dplyr)
+library(wesanderson)
+```
+##Plot for Exp. 2
+```{r}
+load("workspaces/AL_test_first4s.RData")
+rm(list=setdiff(ls(), "first4s.data.first.fix")) #import the dataframe
+```
+
+```{r}
+#aggregate the data
+first4s.data.first.fix.nolooked.included.agg<-first4s.data.first.fix %>%
+  group_by(trialtype_agent) %>%
+  summarise(first_fix_old_goal_mean = mean(first_fix_old_goal, na.rm=TRUE), 
+            first_fix_old_goal_se = sd(first_fix_old_goal, na.rm=TRUE) / sqrt(length(first_fix_old_goal)),
+            #number of trials where dogs anticipated the old goal object:
+            first_fix_old_goal_sum = sum(first_fix_old_goal==1, na.rm=TRUE), 
+            #number of trials where dogs looked at at least one of the objects:
+            first_fix_old_goal_count = sum(!is.na(first_fix_old_goal)),
+            first_fix_old_side_mean = mean(first_fix_old_side, na.rm=TRUE),
+            first_fix_old_side_se = sd(first_fix_old_side, na.rm=TRUE) / sqrt(length(first_fix_old_side)),
+            #number of trials where dogs anticipated the old side object:
+            first_fix_old_side_sum = sum(first_fix_old_side==1, na.rm=TRUE))
+
+```
+
+```{r}
+data2<-first4s.data.first.fix.nolooked.included.agg #%>% 
+ # mutate (session_withinagent=trial_within_block) #trial within agent (four trials per agent, 4 sessions in total, each made of 2 identical trials) 
+rm(list="first4s.data.first.fix.nolooked.included.agg")
+```
+
+
+```{r}
+#SE
+data2.se.long <- data2 %>%
+   select(trialtype_agent, first_fix_old_goal = first_fix_old_goal_se, first_fix_old_side = first_fix_old_side_se) %>%
+   pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "se.dogs")
+
+#bring the dataframe in the right format
+data2.long <- data2 %>%
+  select(trialtype_agent, first_fix_old_goal = first_fix_old_goal_mean, first_fix_old_side = first_fix_old_side_mean) %>%
+  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "prop.dogs") %>%
+  mutate(experiment=rep("Experiment 2"))%>%
+  full_join(data2.se.long)
+
+al_plot_NAs_included_Exp2<-ggplot(data2.long, aes(x = trialtype_agent, y = prop.dogs, fill = AoI)) +
+  geom_bar(stat="identity", position = position_dodge(0.9), alpha=0.8) + 
+  geom_errorbar(aes(ymin = prop.dogs - se.dogs, ymax = prop.dogs + se.dogs), width = 0.2, position = position_dodge(0.9))+
+  #facet_wrap(~session_withinagent)+
+  ylim(0,0.5)+
+  ylab("Prop. dogs")+
+  xlab("Agent")+
+  theme(axis.text = element_text(size = 14))+  #axis text size 
+  theme(axis.title = element_text(size = 16)) +
+  theme_bw() +
+  scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("old identity - 
+new side","old side - 
+new identity"))
+
+al_plot_NAs_included_Exp2
+```
+
+## Plot for Exp. 1
+
+```{r}
+load("./workspaces/ET_dog_woodward_kano_paradigm.RData")
+rm(list=setdiff(ls(), c("end.ip.data", "first4s.data.first.fix", "data2","data2.se.long", "data2.long","al_plot_NAs_included_Exp2"))) #import the dataframe
+
+#bring it in the right format
+end.ip.first.look <- end.ip.data %>%
+  select(
+    subject,
+    trial_within_block,
+    IA_LABEL,
+    condition,
+    condition_first,
+    target,
+    target_location,
+    IA_FIRST_FIXATION_TIME
+  ) %>%
+  pivot_wider(names_from = IA_LABEL, values_from = IA_FIRST_FIXATION_TIME) %>%
+   mutate(
+    upper_IA_large = as.numeric(upper_IA_large),
+    lower_IA_large = as.numeric(lower_IA_large)
+  ) %>%
+  mutate(first_look = ifelse((
+    upper_IA_large < lower_IA_large |
+      (!is.na(upper_IA_large) & is.na(lower_IA_large))
+  ), "upper", "")) %>%
+  mutate(first_look2 = ifelse((
+    lower_IA_large < upper_IA_large |
+      (!is.na(lower_IA_large) & is.na(upper_IA_large))
+  ), "lower", "")) %>%
+  mutate(first_look3 = ifelse(
+    !is.na(first_look),
+    first_look,
+    ifelse(!is.na(first_look2), first_look2, NA)
+  )) %>%
+  mutate(old_goal_first_look = as.numeric(ifelse((target_location ==
+                                                            "up" &
+                                                            first_look3 == "lower"),
+                                                         1,
+                                                         ifelse((target_location == "down" &
+                                                                   first_look3 == "upper"),
+                                                                1,
+                                                                ifelse((target_location == "up" &
+                                                                          first_look3 == "upper"),
+                                                                       0,
+                                                                       ifelse((
+                                                                         target_location == "down" & first_look3 == "lower"
+                                                                       ), 0, NA)
+                                                                )
+                                                         )
+  )),
+  old_goal_first_look_noNA = as.numeric(ifelse(is.na(first_look3),0, old_goal_first_look )))%>% #if none of the AoIs was looked at, assign a value of 0
+ 
+   mutate(old_side_first_look = as.numeric(ifelse((target_location ==
+                                                            "up" &
+                                                            first_look3 == "lower"),
+                                                         0,
+                                                         ifelse((target_location == "down" &
+                                                                   first_look3 == "upper"),
+                                                                0,
+                                                                ifelse((target_location == "up" &
+                                                                          first_look3 == "upper"),
+                                                                       1,
+                                                                       ifelse((
+                                                                         target_location == "down" & first_look3 == "lower"
+                                                                       ), 1, NA)
+                                                                )
+                                                         )
+  )),
+  old_side_first_look_noNA = as.numeric(ifelse(is.na(first_look3),0, old_side_first_look ))) #if none of the AoIs was looked at, assign a value of 0
+
+summary(end.ip.first.look$old_goal_first_look_noNA)
+#manually replacing Nas that were not automatically scored correctly
+end.ip.first.look[c(67,97),"old_goal_first_look_noNA"] <-0
+ 
+summary(end.ip.first.look$old_side_first_look_noNA)
+#manually replacing Nas that were not automatically scored correctly
+end.ip.first.look[c(67,97),"old_side_first_look_noNA"] <-0
+
+```
+
+
+```{r}
+#aggregate data per agent 
+end.ip.first.fix.nolooked.included.agg <-end.ip.first.look %>%
+  group_by(condition) %>% #, trial_within_block) %>%
+  summarise(first_fix_old_goal_mean = mean(old_goal_first_look_noNA, na.rm=TRUE), 
+            first_fix_old_goal_se = sd(old_goal_first_look_noNA, na.rm=TRUE) / sqrt(length(old_goal_first_look_noNA)),
+            #number of dogs that anticipated the old goal object:
+            first_fix_old_goal_sum = sum(old_goal_first_look_noNA==1, na.rm=TRUE), 
+            #number of dogs that looked at at least the old goal object:
+            first_fix_old_goal_count = sum(!is.na(old_goal_first_look)),
+            first_fix_old_side_mean = mean(old_side_first_look_noNA, na.rm=TRUE),
+            first_fix_old_side_se = sd(old_side_first_look_noNA, na.rm=TRUE) / sqrt(length(old_side_first_look_noNA)),
+            #number of dogs that anticipated the old side object:
+            first_fix_old_side_sum = sum(old_side_first_look==1, na.rm=TRUE),
+            #number of trials in which dogs looked at at least the old goal object:
+            first_fix_old_side_count = sum(!is.na(old_side_first_look))) 
+
+data1<-end.ip.first.fix.nolooked.included.agg %>% 
+  mutate (trialtype_agent=fct_recode(condition, human="hand", inanimate="claw")) %>% 
+ # mutate (session_withinagent=trial_within_block)%>% #trial within agent (four trials per agent, 4 sessions in total, each made of 2 identical trials) 
+  subset(select = -c(condition))#,trial_within_block))
+
+```
+
+```{r}
+#SE
+data1.se.long <- data1 %>%
+   select(trialtype_agent, first_fix_old_goal = first_fix_old_goal_se, first_fix_old_side = first_fix_old_side_se) %>%
+   pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "se.dogs")
+
+data1.long <- data1 %>%
+  select(trialtype_agent, first_fix_old_goal = first_fix_old_goal_mean, first_fix_old_side = first_fix_old_side_mean) %>%
+  pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "prop.dogs") %>% 
+  mutate(experiment=rep("Experiment 1"))%>%
+  full_join(data1.se.long)
+
+al_plot_NAs_included_Exp1<-ggplot(data1.long, aes(x = trialtype_agent, y = prop.dogs, fill = AoI)) +
+  geom_bar(stat="identity", position = position_dodge(0.9), alpha=0.8) + 
+  geom_errorbar(aes(ymin = prop.dogs - se.dogs, ymax = prop.dogs + se.dogs), width = 0.2, position = position_dodge(0.9))+
+  #facet_wrap(~session_withinagent)+
+  ylim(0,0.5)+
+  ylab("Prop. dogs")+
+  xlab("Agent")+
+  theme(axis.text = element_text(size = 14))+  #axis text size 
+  theme(axis.title = element_text(size = 16)) +
+  theme_bw() +
+  scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("old identity - 
+new side","old side - 
+new identity"))
+
+al_plot_NAs_included_Exp1
+```
+
+## Bring datasets together
+```{r}
+data.both.exps<-data1.long %>% 
+  full_join(data2.long)
+```
+##Plot
+```{r}
+al_plot_NAs_included_both_exps<-ggplot(data.both.exps, aes(x = trialtype_agent, y = prop.dogs, fill = AoI)) +
+  geom_bar(stat="identity", position = position_dodge(0.9), alpha=0.8) + 
+  geom_errorbar(aes(ymin = prop.dogs - se.dogs, ymax = prop.dogs + se.dogs), width = 0.2, position = position_dodge(0.9))+
+  facet_wrap(~experiment)+
+  ylim(0,0.5)+
+  ylab("Prop. dogs")+
+  xlab("Agent")+
+  theme(axis.text = element_text(size = 14))+  #axis text size 
+  theme(axis.title = element_text(size = 16)) +
+  theme_bw() +
+  scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("old identity - 
+new side","old side - 
+new identity"))
+al_plot_NAs_included_both_exps
+```
+
+## Save the plot
+```{r}
+ggsave(filename="graphs/AL_NAs_included_AOIs_both_experiments.png",
+  plot = al_plot_NAs_included_both_exps,
+  width=8.5,
+  height=5,
+  scale=0.55,
+  dpi=1200)
+```
+
+
+

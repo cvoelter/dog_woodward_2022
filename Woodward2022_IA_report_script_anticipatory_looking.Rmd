@@ -372,11 +372,6 @@ ggsave(filename="graphs/AL_NAs_included.png",
 
 
 ```{r}
-#LL: not needed?
-# first4s.data.first.fix.nolooked.included.se.long <- first4s.data.first.fix.nolooked.included.agg %>%
-#   select(trialtype_agent, session_withinagent, first_fix_old_goal = first_fix_old_goal_se, first_fix_old_side = first_fix_old_side_se) %>%
-#   pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "se.dogs")
-
 first4s.data.first.fix.nolooked.included.agg.long <- first4s.data.first.fix.nolooked.included.agg %>%
   select(trialtype_agent, session_withinagent, first_fix_old_goal = first_fix_old_goal_mean, first_fix_old_side = first_fix_old_side_mean) %>%
   pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "prop.dogs") #%>%

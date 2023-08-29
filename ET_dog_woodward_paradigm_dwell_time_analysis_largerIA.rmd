@@ -151,6 +151,9 @@ end.ip.first.look <- end.ip.data %>%
   )),
   object_congruent_first_look_noNA = as.numeric(ifelse(is.na(first_look3),0, object_congruent_first_look )))
 
+#manually replacing Nas that were not automatically scored correctly
+end.ip.first.look[c(67,97),"object_congruent_first_look_noNA"] <-0
+
 #checks:
 view(dfSummary(end.ip.data))
 
@@ -331,7 +334,7 @@ m1.endIP.largeIA_interceptonly<-glmmTMB(prop.dwell.scaled2 ~  z.trial+(1+z.trial
 round(summary(m1.endIP.largeIA_interceptonly)$coefficients$cond,3)
 ```
 
-### first fixation analysis (binary)
+### First fixation analysis (binary)
 ```{r}
 model.data.end.IP.first.looks<-end.ip.first.look%>%
   mutate(z.trial=scale(trial_within_block, center = TRUE, scale=TRUE),
