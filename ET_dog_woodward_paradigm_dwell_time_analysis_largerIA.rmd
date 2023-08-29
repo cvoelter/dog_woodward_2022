@@ -167,7 +167,6 @@ table(end.ip.data$condition, end.ip.data$TRIAL_TOTAL_VISITED_IA_COUNT)
 
 * Absolute dwell time
 ```{r}
-
 test.IP.end.data <- end.ip.data %>%
   group_by(subject, condition, target_location, IA_LABEL)%>%
   summarise(mean_dwell=mean(IA_DWELL_TIME))
@@ -196,6 +195,13 @@ ggplot(data = test.IP.end.data%>%filter(condition=="hand"), aes(x=IA_LABEL, y=me
 ```
 * Proportion dwell time
 ```{r}
+#descriptive statistics
+test.IP.end.data.object.congruent.descr <- end.ip.data.wider %>%
+  group_by(condition, object_congruent)%>%
+  summarise(mean_dwell=mean(dwell_time),
+            mean_proportion_dwell=mean(proportion.object.congruent.dwell.time, na.rm = TRUE),
+            sd_prop_dwell= sd(proportion.object.congruent.dwell.time, na.rm = TRUE),
+            se_proportion_dwell=sd(proportion.object.congruent.dwell.time, na.rm = TRUE)/sqrt(length(proportion.object.congruent.dwell.time)))
 
 test.IP.end.data.object.congruent <- end.ip.data.wider %>%
   group_by(subject, condition, object_congruent)%>%

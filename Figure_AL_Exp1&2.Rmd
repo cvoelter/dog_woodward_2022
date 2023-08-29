@@ -22,12 +22,14 @@ rm(list=setdiff(ls(), "first4s.data.first.fix")) #import the dataframe
 first4s.data.first.fix.nolooked.included.agg<-first4s.data.first.fix %>%
   group_by(trialtype_agent) %>%
   summarise(first_fix_old_goal_mean = mean(first_fix_old_goal, na.rm=TRUE), 
+            first_fix_old_goal_sd = sd(first_fix_old_goal, na.rm=TRUE),
             first_fix_old_goal_se = sd(first_fix_old_goal, na.rm=TRUE) / sqrt(length(first_fix_old_goal)),
             #number of trials where dogs anticipated the old goal object:
             first_fix_old_goal_sum = sum(first_fix_old_goal==1, na.rm=TRUE), 
             #number of trials where dogs looked at at least one of the objects:
             first_fix_old_goal_count = sum(!is.na(first_fix_old_goal)),
             first_fix_old_side_mean = mean(first_fix_old_side, na.rm=TRUE),
+            first_fix_old_side_sd = sd(first_fix_old_side, na.rm=TRUE),
             first_fix_old_side_se = sd(first_fix_old_side, na.rm=TRUE) / sqrt(length(first_fix_old_side)),
             #number of trials where dogs anticipated the old side object:
             first_fix_old_side_sum = sum(first_fix_old_side==1, na.rm=TRUE))
@@ -159,12 +161,14 @@ end.ip.first.look[c(67,97),"old_side_first_look_noNA"] <-0
 end.ip.first.fix.nolooked.included.agg <-end.ip.first.look %>%
   group_by(condition) %>% #, trial_within_block) %>%
   summarise(first_fix_old_goal_mean = mean(old_goal_first_look_noNA, na.rm=TRUE), 
+            first_fix_old_goal_sd = sd(old_goal_first_look_noNA, na.rm=TRUE),
             first_fix_old_goal_se = sd(old_goal_first_look_noNA, na.rm=TRUE) / sqrt(length(old_goal_first_look_noNA)),
             #number of dogs that anticipated the old goal object:
             first_fix_old_goal_sum = sum(old_goal_first_look_noNA==1, na.rm=TRUE), 
             #number of dogs that looked at at least the old goal object:
             first_fix_old_goal_count = sum(!is.na(old_goal_first_look)),
             first_fix_old_side_mean = mean(old_side_first_look_noNA, na.rm=TRUE),
+            first_fix_old_side_sd = sd(old_side_first_look_noNA, na.rm=TRUE),
             first_fix_old_side_se = sd(old_side_first_look_noNA, na.rm=TRUE) / sqrt(length(old_side_first_look_noNA)),
             #number of dogs that anticipated the old side object:
             first_fix_old_side_sum = sum(old_side_first_look==1, na.rm=TRUE),
