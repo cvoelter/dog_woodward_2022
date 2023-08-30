@@ -480,7 +480,6 @@ gamm.null <- bam(pupil_base ~ s(time, k=20)+
 
 #full-null model comparison 
 compareML(gamm.null, gamm.int) #AIC difference: 32.58, model gammm.int has lower AIC.
-# -----"?
 
 AIC(gamm.int, gamm.null)
 
@@ -495,7 +494,7 @@ gamm.full <- bam(pupil_base ~ condition + agent +
            data=dat, discrete=TRUE, nthreads=40, method="ML") 
 
 #LL: the pupil size workspace is too large for GitHub, hence I save it on my laptop
-save.image("C:/Users/lonardol/Desktop/Eye-tracker/Action_understanding_experiments/Kano_Woodward/Woodward_2022/pupil_size.RData")
+#save.image("C:/Users/lonardol/Desktop/Eye-tracker/Action_understanding_experiments/Kano_Woodward/Woodward_2022/pupil_size.RData")
 
 
 library(mgcViz)

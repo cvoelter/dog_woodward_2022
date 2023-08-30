@@ -630,6 +630,12 @@ first4s.data.latency.first.fix.long <- first4s.data.latency.first.fix %>%
 
 table(first4s.data.latency.first.fix.long$subject, first4s.data.latency.first.fix.long$trialtype_agent)
 table(first4s.data.latency.first.fix.long$subject, first4s.data.latency.first.fix.long$IA)
+
+#descriptive statistics
+first4s.data.latency.first.fix.long.descr<-first4s.data.latency.first.fix.long %>% 
+  group_by(trialtype_agent, IA) %>% 
+  summarise(mean_latency=mean(latency),
+            sd_latency=sd(latency))
 ```
 
 
@@ -683,11 +689,7 @@ library(ggbeeswarm)
 library(ggsignif)
 library(vipor)
 
-#old plot without lines connecting subjects
-latency_AL_AOIs_plot
-
-#new plot with lines connecting subjects
-latency_AL_AOIs_plot_lines<-ggplot(first4s.data.latency.first.fix.long.agg, aes(x = trialtype_agent, y = mean_latency, fill = AoI)) +
+latency_AL_AOIs_plot<-ggplot(first4s.data.latency.first.fix.long.agg, aes(x = trialtype_agent, y = mean_latency, fill = AoI)) +
   geom_boxplot(position = position_dodge(0.8), alpha=0.8, outlier.colour = "white") +
   #scale_fill_viridis(discrete = TRUE,  option = "viridis", begin=0.25, labels= c("old side","old goal"))+
   #scale_fill_manual(values=wes_palette("IsleofDogs1"), labels= c("old side","old goal"))+
@@ -701,27 +703,28 @@ new identity"))+
   #geom_jitter(position = position_dodge(0.8), alpha=.4, size=2)+
   #scale_fill_manual(values=c("dodgerblue", "darkorange"), labels= c("old side","old goal"))+
   ylim(-3800,250)+
-  ylab("Mean latency to first fixation")+
+  ylab("Mean latency to first fixation (ms)")+
   xlab("Agent")+
   #geom_text(x=2, y=3200, label="*", size=6, col="black")+
   geom_signif(xmin=1.2, xmax=2.2, annotations="*", #LMM, test of fixed effect of agent (involved in interaction)
               y_position = 200, tip_length = 0.01)+
   geom_signif(xmin=1.8, xmax=2.2, annotations="*", #LMM relevelled so that inanimate is the reference category, test of fixed effect of AoI (involved in interaction)
               y_position = -50, tip_length = 0.01)+
-  geom_line(aes(group=subject), linewidth=.5, lty =2, color="grey", alpha=.9)+
+  #geom_line(aes(group=subject), linewidth=.5, lty =2, color="grey", alpha=.9)+
   theme_bw()+
   theme(axis.text=element_text(size=12))+
   theme(axis.title=element_text(size=12))
-latency_AL_AOIs_plot_lines
+latency_AL_AOIs_plot
 ```
 ```{r}
-ggsave(filename="graphs/latency_AL_AOIs2_lines.png",
-  plot = latency_AL_AOIs_plot_lines,
+ggsave(filename="graphs/latency_AL_AOIs2.png",
+  plot = latency_AL_AOIs_plot,
   width=10,
   height=6,
   scale=0.55,
   dpi=1200)
 ```
+
 #model relevelled so that old goal is the new reference category
 ```{r}
 first4s.data.latency.first.fix.long$IA_rel = relevel(as.factor(first4s.data.latency.first.fix.long$IA), ref = "old_goal_new_side")
@@ -846,6 +849,26 @@ first4s.dwell.time$trialtype_agent.c=as.vector(scale(as.numeric(first4s.dwell.ti
 first4s.dwell.time$prop_time_old_goal.scaled <- (first4s.dwell.time$prop_time_old_goal*(length(first4s.dwell.time$prop_time_old_goal) - 1) + 0.5)/length(first4s.dwell.time$prop_time_old_goal)#transform DV to exclude 0s and 1s
 
 table(first4s.dwell.time$subject,first4s.dwell.time$prop_time_old_goal.scaled) # 5 dogs never looked at the objects during the first 4 seconds
+
+#descriptive statistics
+first4s.dwell.time.descr <- first4s.data %>%
+  filter(condition != "fam") %>% #keep only test trials
+  filter(grepl("AL", IA_LABEL)) %>% #keep only AL AoIs (smaller)
+  select(
+    subject,
+    session_number,
+    IA_fam_object ,
+    trialtype_agent,
+    IA_DWELL_TIME
+  ) %>%
+  pivot_wider(names_from = IA_fam_object, values_from = IA_DWELL_TIME) %>% 
+   mutate(prop_time_old_goal = old_goal_new_side / (old_goal_new_side + new_goal_old_side),
+          prop_time_old_side = new_goal_old_side / (new_goal_old_side + old_goal_new_side)) %>% 
+  pivot_longer(cols=c(prop_time_old_goal, prop_time_old_side), names_to = "AoI", values_to = "prop_dwell_time") %>% 
+  mutate(prop_dwell_time=replace_na(prop_dwell_time,0)) %>% #assign a prop. dwell time of 0 if dogs never looked into the AoIs.
+  group_by(trialtype_agent,AoI) %>% 
+  summarise(mean_prop_dwell_time = mean(prop_dwell_time),
+            sd_prop_dwell_time = sd(prop_dwell_time))
 ```
 
 
@@ -932,7 +955,7 @@ write.csv(model_table_prop_dwell_time_first4s, file = "saves/mm1_beta_prop_dwell
 
 
 
-## old stuff
+## LL: delete? old stuff
 ######################################################### copied from different projects ###########
 
 

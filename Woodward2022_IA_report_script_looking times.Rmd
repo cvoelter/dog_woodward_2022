@@ -20,8 +20,7 @@ source("./functions/boot_glmm2.r")
 load("./workspaces/Looking_times.RData")
 ```
 
-## Original IAs
-### End IP
+## Import the data
 ```{r}
 demo.data <- read_csv("data/Woodward_2022_counterbalancing.csv") %>%
   mutate(
@@ -161,6 +160,7 @@ after_agent_dir_cue_wider.data <- after_agent_dir_cue.data %>%
   ungroup()%>%
   mutate(prop_dwell_time = sum_dwell_time / TRIAL_DWELL_TIME)
 ```
+
 ## Linear mixed model
 
 ```{r}
@@ -272,6 +272,16 @@ length(residuals(mm1.dwell.time_red2))/
 (length(fixef(mm1.dwell.time_red2))+
 nrow(as.data.frame(summary(mm1.dwell.time_red2)$varcor)))
 ```
+Descriptive statistics
+```{r}
+after_agent_dir_cue_wider.data.descr <- after_agent_dir_cue_wider.data %>% 
+  group_by(trialtype_agent) %>% 
+  summarise(mean_dwell_time = mean(sum_dwell_time),
+            sd_dwell_time = sd(sum_dwell_time))
+
+after_agent_dir_cue_wider.data.descr
+```
+
 model stability
 ```{r}
 
@@ -304,8 +314,6 @@ r.squaredGLMM(mm1.dwell.time_red2)
 
 #### output table
 ```{r}
-
-
 model_table_mm1.dwell.time_red2 <- bind_cols(as.data.frame(summary(mm1.dwell.time_red2)$coefficients[,-3]),
                          summary(mm1.dwell.time_red2.reml)$coefficients[,c("df","t value", "Pr(>|t|)")],
                          mm1.dwell.time_red2_boot_ci_est[,2:3],
@@ -318,48 +326,67 @@ mutate(P=replace(P, P==0, "<0.001"))
 
 write.csv(model_table_mm1.dwell.time_red2 , file = "saves/mm1.dwell.time_red2_agent_obj_test_output_table.csv")
 ```
-Plot absolute looking times 
+## Plot absolute dwell times in the two conditions
 ```{r}
-lt_plot_cond<-ggplot(after_agent_dir_cue_wider.data%>%
-               mutate(condition= recode(condition, new_goal="New goal", new_side="New side")),
-                aes(x=condition,y=sum_dwell_time))+
-                geom_boxplot()+
-                ylab("Dwell times to agent + target obejct (ms)")+
+library(ggbeeswarm)
+
+after_agent_dir_cue_wider.data.agg<- after_agent_dir_cue_wider.data %>%
+  group_by(condition, subject)%>%
+  summarise(mean_dwell_time = mean(sum_dwell_time))#averaged across trials and agents
+
+lt_plot_cond<-ggplot(after_agent_dir_cue_wider.data.agg%>%
+               mutate(condition= fct_recode(condition, "Old side-new identity"="new_goal", "Old identity-new side" = "new_side")),
+                aes(x=condition,y=mean_dwell_time))+
+                geom_boxplot(position = position_dodge(0.8), alpha=0.8)+
+                geom_quasirandom(method = "pseudorandom", width=0.1, dodge.width=.8, alpha=.4, size=2)+
+                geom_line(aes(group=subject,condition), linewidth=.5, lty =2, color="grey", alpha=.9)+
+                ylab("Mean dwell time to agent/target obejct (ms)")+
                 xlab("Condition")+
-                theme(axis.text = element_text(size = 14))+
-                theme(axis.title = element_text(size = 16))
+                ylim(c(1500, 18000))+
+                theme_bw()+
+                theme(axis.text = element_text(size = 11))+
+                theme(axis.title = element_text(size = 14))
+                    
             
                 
 lt_plot_cond
 ```
 
-
 ```{r}
 ggsave(filename="graphs/looking_times.png",
   plot = lt_plot,
   width=8.5,
-  height=5,
+  height=6,
   #scale=0.55,
   dpi=1200)
 ```
-Plot looking times to the different agents
+## Plot absolute dwell times to the different agents
 ```{r}
-#library(ggsignif)
-lt_plot_agent<-ggplot(after_agent_dir_cue_wider.data%>%
-               mutate(trialtype_agent= recode(trialtype_agent, human="Human", inanimate="Inanimate")),
-                aes(x=trialtype_agent,y=sum_dwell_time))+
-                geom_boxplot()+
-                ylab("Dwell times to agent + target obejct (ms)")+
+library(ggsignif)
+
+after_agent_dir_cue_wider.data.agg<- after_agent_dir_cue_wider.data %>%
+  group_by(trialtype_agent, subject)%>%
+  summarise(mean_dwell_time = mean(sum_dwell_time))#points averaged across trials and conditions
+
+lt_plot_agent<-ggplot(after_agent_dir_cue_wider.data.agg%>%
+              mutate(trialtype_agent= fct_recode(trialtype_agent, "Human"="human","Inanimate"="inanimate")),
+                aes(x=trialtype_agent,y=mean_dwell_time))+
+                geom_boxplot(position = position_dodge(0.8), alpha=0.8)+
+  geom_quasirandom(method = "pseudorandom", width=0.1, dodge.width=.8, alpha=.4, size=2)+
+                geom_line(aes(group=subject), linewidth=.5, lty =2, color="grey", alpha=.9)+
+                ylab("Mean dwell time to agent/target obejct (ms)")+
                 xlab("Agent")+
-                ylim(c(0, 20000))+
+                ylim(c(1500, 18000))+
                 geom_signif(comparisons=list(c("Human","Inanimate")), annotations="**",
-                y_position = 17000, tip_length = 0, textsize=8)+
-                theme(axis.text = element_text(size = 14))+
-                theme(axis.title = element_text(size = 16))
+                y_position = 16000, tip_length = 0, textsize=8)+
+                theme_bw()+
+                theme(axis.text = element_text(size = 11))+
+                theme(axis.title = element_text(size = 14))
             
                 
 lt_plot_agent
 ```
+
 ```{r}
 ggsave(filename="graphs/looking_times_agents.png",
   plot = lt_plot_agent,
@@ -368,5 +395,19 @@ ggsave(filename="graphs/looking_times_agents.png",
   #scale=0.55,
   dpi=1200)
 ```
-
+##Plot dwell times together
+```{r}
+library(cowplot)
+bothplots<-plot_grid(lt_plot_cond, lt_plot_agent, nrow=1, labels=c("A", "B"),
+          hjust = 0, vjust= 1.7, label_x = c(0.27,0.27))
+bothplots
+```
+```{r}
+ggsave(filename="graphs/dwell_times_Test_Exp2_both_plots.png",
+  plot = bothplots,
+  width=8.5,
+  height=5,
+  #scale=0.55,
+  dpi=1200)
+```
 
