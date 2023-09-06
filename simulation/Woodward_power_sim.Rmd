@@ -249,7 +249,7 @@ lrt.data2
 write.table(lrt.data2, file = "post_hoc_power_table.txt", sep = ",", quote = FALSE, row.names = T)
 ```
 
-#### Plotting the proportion of significant LRTs for the predictor variable condition ONLY based on models that converged and with a significant full-null model comparison
+## Plotting the proportion of significant LRTs for the predictor variable condition ONLY based on models that converged and with a significant full-null model comparison
 
 ```{r echo=FALSE}
 
@@ -266,3 +266,10 @@ p.con.power <- ggplot(data = lrt.data2, aes(y=proportion.sign.lrt.con, x=as.fact
 
 ggsave( p.con.power, filename = "woodward_power.png", scale = 0.5, height = 8, width = 9)
 ```
+##Equivalence tests: two one-sided tests
+```{r}
+#Cannnon & Woodward (2012)'s Cohen's d= (0.65-0.29)/sqrt((0.28^2+0.33^2)/2) =1.18
+library(TOSTER)
+TOSTtwo(m1 = 0.08, m2 = 0.21, sd1 = 0.27, sd2 = 0.41, n1 = 19, n2 = 19, low_eqbound_d = -1.18, high_eqbound_d = 1.18, alpha = 0.05, var.equal = FALSE)
+```
+

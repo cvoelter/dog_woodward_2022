@@ -156,8 +156,6 @@ object_pref_data<-data.frame(table(sample.data.ft$subject, sample.data.ft$ia_obj
   pivot_wider(values_from = Freq, names_from = "Var2")
 t.test(object_pref_data$ball, object_pref_data$elephant, paired = TRUE) # no significant preference for one of the objects in the first trial of each fam session
 table(sample.data.ft$subject, sample.data.ft$IA_fam_object)
-
-
 ```
 
 identify the time points when the video frame, in which object starts moving after being pushed by agent, is shown
@@ -166,8 +164,6 @@ ref_time_data<-sample.data.ft %>% filter(SAMPLE_MESSAGE == "video_frame646") %>%
   select(subject, session_number, time)%>%
   rename(agent_arrival_time2 = time)
 ```
-
-
 
 ### Analysis of anticipatory looks to target
 ```{r}
@@ -244,28 +240,6 @@ fam_gat_dt2<-ggplot(sample.data.ft.al.agg2, aes(x=trialtype_agent, y = mean_firs
   theme(axis.text=element_text(size=12))
 fam_gat_dt2
 
-# annot.data<-data.frame(
-#   label= c("ns","*"),
-#   obj=c("Distractor", "Target"),
-#   x=c(1.5, 1.5),
-#   y=c(4850,4850))
-# fam_gat_dt2<-fam_gat_dt2 + geom_text(
-#   data    = annot.data,
-#   mapping = aes(x = x, y = y, label = label)
-# )
-
-# lines<-tibble(
-#   metric=c("Distractor", "Target"),
-#   x= c(1,1),
-#   xend = c(2,2) ,
-#   y = c(4950, 4800),
-#   yend = y
-# )
-
-# fam_gat_dt_sign<-fam_gat_dt2+
-#   geom_segment(data=lines, aes(x=x, xend=xend, y=y, yend=yend), inherit.aes=FALSE)
-# 
-# fam_gat_dt_sign
 
 
 ggsave(fam_gat_dt2, filename= "graphs/fam_gat_dt2.png", height=6, width=10, scale=0.7, dpi=1200)
@@ -434,19 +408,24 @@ model_table_ft_al_fam<- bind_cols(as.data.frame(summary(mm1.ft.al)$coefficients)
 
 write.csv(model_table_ft_al_fam, file = "saves/mm1_ft_al_fam.csv")
 ```
+##descriptive stats
+```{r}
+sample.data.ft.al.descr<-sample.data.ft.al.agg2  %>%
+  group_by(trialtype_agent, IA_fam_object) %>% 
+  summarise(mean_latency=mean(mean_first_object_look),
+            sd_latency=sd(mean_first_object_look))
+```
 ## one-sample t-test: compare the onset of the first fixation to the target and distractor object to the reference time when the object starts moving.
 
 ```{r}
 library(broom)
 sample.data.ft.al.ttest<-sample.data.ft.al.agg2  %>%
-  group_by(trialtype_agent, IA_fam_object) %>%
+  group_by(trialtype_agent, IA_fam_object) %>% 
   summarise(ttest = list(t.test(mean_first_object_look, mu=0))) %>%
   mutate(ttest = map(ttest, tidy)) %>%
   unnest(cols = c(ttest))
 
 p.adjust(sample.data.ft.al.ttest$p.value, method = "holm", n = length(sample.data.ft.al.ttest$p.value))#when correcting for multiple comparisons, the trends disappear
-#BH=Benjamini & Hochberg (1995) method
-
 ```
 
 ##LMM distractor
