@@ -36,8 +36,6 @@ packageVersion("colorspace")
 col1 <- 'pink1'
 col2 <- 'black'
 col3 <- 'indianred'
-
-#load("pupil_size.RData")
 ```
 
 
@@ -303,9 +301,6 @@ exp.data.pupil.processed.downsampled <- exp.data.pupil.processed %>%
 
 * Plot interpolated data: individual level
 ```{r}
-#scale_color_brewer(palette="Dark2")+
-  #scale_fill_brewer(palette="Dark2")
-
 exp.data.pupil.processed.downsampled2 <-
   exp.data.pupil.processed.downsampled %>%
   mutate(condition = fct_recode(condition, "New goal" = "new_goal", "New side" =
@@ -337,9 +332,6 @@ ggsave(plot.woodward.pupil.individual, filename = "graphs/pupil_processed_baseli
 ```
 * Plot interpolated data: individual level, only in the IP
 ```{r}
-#scale_color_brewer(palette="Dark2")+
-  #scale_fill_brewer(palette="Dark2")
-
 plot.woodward.pupil.individual_IP<-ggplot(data = exp.data.pupil.processed.downsampled2, aes(x = bin_low, y =pupil.base.corrected.binned )) +
   ylab("Pupil size ") +
   xlab("Time (in ms)") +
@@ -493,9 +485,6 @@ gamm.full <- bam(pupil_base ~ condition + agent +
            s(time, Event, bs='fs', m=1), 
            data=dat, discrete=TRUE, nthreads=40, method="ML") 
 
-#LL: the pupil size workspace is too large for GitHub, hence I save it on my laptop
-#save.image("C:/Users/lonardol/Desktop/Eye-tracker/Action_understanding_experiments/Kano_Woodward/Woodward_2022/pupil_size.RData")
-
 
 library(mgcViz)
 gam.check(gamm.full)
@@ -503,8 +492,6 @@ gam.check(gamm.full)
 
 acf(resid(gamm.full), bty='n', main="ACF residuals model1")
 acf(resid(gamm.full), plot=FALSE)
-
-
 ```
 
 
@@ -516,7 +503,6 @@ png("graphs/pupil_gamm.full_gam_check.png", units="cm", res=600, width=24, heigh
 gam_check_plot<-plot_gam_check(gamm.full, scatter=TRUE)
 print(gam_check_plot)
 dev.off()
-#LL: the scatterplot of residuals shows a value that is more frequent than others (larger size of one of the dots compared to all others)? 
 
 png("graphs/pupil_gamm.full_acf_plot.png", units="cm", res=600, width=12, height = 12)
 acf_plot<-acf(resid(gamm.full), bty='n', main="")

@@ -8,7 +8,6 @@ notes:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 rm(list=ls())
-#remove(list=c("first4s.data_short"))
 library(tidyverse)
 library(summarytools)
 library(lme4)
@@ -73,10 +72,6 @@ after_agent_dir_cue.data <-
   ) %>%
   filter(DATA_FILE != "Melody_1.edf", DATA_FILE != "Mia_5.edf") %>%
   filter(DATA_FILE != "Timo_5.edf", DATA_FILE != "Joker_5.edf") %>% # backup recordings in case the first sessions are below 70% onscreen looking
-  #filter(!(DATA_FILE == "Amy_4.edf" & Trial_Index_ != 1)) %>%
-  #mutate(session.num = as.numeric(session.num)) %>%
-  #mutate(session.num.corrected = ifelse(DATA_FILE == "Amy_4.edf" | DATA_FILE == "Amy_5.edf" | DATA_FILE == "George_5.edf" | DATA_FILE == "Melody_2.edf" | DATA_FILE == #"Melody_3.edf" | DATA_FILE == "Melody_4.edf", session.num-1,
-#                                        ifelse(DATA_FILE == "Melody_7.edf" | DATA_FILE == "Mia_6.edf", session.num-3, session.num))) %>% #recoding of session number to account for dogs with aborted sessions
   mutate(
     Session_Name_ = fct_recode(
       Session_Name_,
@@ -203,8 +198,6 @@ after_agent_dir_cue_wider.data$agent_first.c = as.vector(scale(
 levels(as.factor(after_agent_dir_cue_wider.data$z.session))
 hist(after_agent_dir_cue_wider.data$sum_dwell_time)
 ```
-
-
 
 
 fit model

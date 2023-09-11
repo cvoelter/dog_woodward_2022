@@ -137,23 +137,16 @@ location_pref_data<-data.frame(table(sample.data.ft$subject, sample.data.ft$RIGH
 t.test(location_pref_data$lower_IA_large, location_pref_data$upper_IA_large, paired = TRUE) # t = -1.5291, df = 12, p-value = 0.1522
 #no significant preference for one of the locations in the first trial of each fam session
 
-#LL: can we get the object information (i.e., whether the duck or frog was in the looked at AOI)?
-
-
 table(sample.data.ft$subject, sample.data.ft$target)
 ```
 
-###LL: These videos are not perfectly synchronised: the claw visually overlaps with the objects sooner than the hand. But the hand makes contact with the object sooner. The claw reaching up is faster than the calw reaching down etc. I chose video frame 39 as in all conditions the agent already visually overlaps with the object but the action is not completed yet. An alternative could be frame 30 which is very conservative for the claw down.
+Video frame 39 chosen as in all conditions the agent already visually overlaps with the object but the action is not completed yet.
 
-identify the time points when the video frame, in which object starts moving after being pushed by agent, is shown
 ```{r}
 ref_time_data<-sample.data.ft %>% filter(SAMPLE_MESSAGE == "video_frame39") %>%
   select(subject, trial_within_block, time)%>%
   rename(agent_arrival_time2 = time)
 ```
-
-
-
 ### Analysis of anticipatory looks to target
 ```{r}
 #determine when dogs looked first at the agent
@@ -163,11 +156,10 @@ first_look_to_agent <- sample.data.ft %>%
   summarise(first_agent_look = min(time))
 ```
 
-Remove data (before agent starts moving) and before dogs looked at the agent
+Remove data before dogs looked at the agent
 ```{r}
 sample.data.ft.al <- sample.data.ft %>%
   filter(RIGHT_IN_BLINK!=1, RIGHT_IN_SACCADE!=1) %>%
-  #filter(time > agent_start_time) %>% # remove data before the agent starts moving
   full_join(first_look_to_agent) %>%
   filter(time > first_agent_look) %>%# remove data before they looked at the agent for the first time
   full_join(ref_time_data) %>%

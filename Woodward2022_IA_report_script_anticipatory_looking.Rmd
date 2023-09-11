@@ -85,10 +85,6 @@ first4s.data <-
   ) %>%
   filter(DATA_FILE != "Melody_1.edf", DATA_FILE != "Mia_5.edf") %>%
   filter(DATA_FILE != "Timo_5.edf", DATA_FILE != "Joker_5.edf") %>% # backup recordings in case the first sessions are below 70% onscreen looking
-  #filter(!(DATA_FILE == "Amy_4.edf" & Trial_Index_ != 1)) %>%
-  #mutate(session.num = as.numeric(session.num)) %>%
-  #mutate(session.num.corrected = ifelse(DATA_FILE == "Amy_4.edf" | DATA_FILE == "Amy_5.edf" | DATA_FILE == "George_5.edf" | DATA_FILE == "Melody_2.edf" | DATA_FILE == #"Melody_3.edf" | DATA_FILE == "Melody_4.edf", session.num-1,
-#                                        ifelse(DATA_FILE == "Melody_7.edf" | DATA_FILE == "Mia_6.edf", session.num-3, session.num))) %>% #recoding of session number to account for dogs with aborted sessions
   mutate(
     Session_Name_ = fct_recode(
       Session_Name_,
@@ -692,21 +688,12 @@ library(vipor)
 
 latency_AL_AOIs_plot<-ggplot(first4s.data.latency.first.fix.long.agg, aes(x = trialtype_agent, y = mean_latency, fill = AoI)) +
   geom_boxplot(position = position_dodge(0.8), alpha=0.8, outlier.colour = "white") +
-  #scale_fill_viridis(discrete = TRUE,  option = "viridis", begin=0.25, labels= c("old side","old goal"))+
-  #scale_fill_manual(values=wes_palette("IsleofDogs1"), labels= c("old side","old goal"))+
   scale_fill_manual(values=wes_palette("Zissou1")[c(1,4)], labels= c("old identity - 
-new side","old side - 
-new identity"))+
-  #scale_fill_manual(values=wes_palette("FantasticFox1")[c(3,4)], labels= c("old side","old goal"))+
-  #scale_fill_manual(values=wes_palette("Royal1")[c(2,1)], labels= c("old side","old goal"))+
+new side","old side - new identity"))+
   geom_quasirandom(method = "pseudorandom", width=0.1, dodge.width=.8, alpha=.4, size=2)+
-  #geom_jitter(width=0.1, alpha=.4, size=2)+
-  #geom_jitter(position = position_dodge(0.8), alpha=.4, size=2)+
-  #scale_fill_manual(values=c("dodgerblue", "darkorange"), labels= c("old side","old goal"))+
   ylim(-3800,250)+
   ylab("Mean latency to first fixation (ms)")+
   xlab("Agent")+
-  #geom_text(x=2, y=3200, label="*", size=6, col="black")+
   geom_signif(xmin=1.2, xmax=2.2, annotations="*", #LMM, test of fixed effect of agent (involved in interaction)
               y_position = 200, tip_length = 0.01)+
   geom_signif(xmin=1.8, xmax=2.2, annotations="*", #LMM relevelled so that inanimate is the reference category, test of fixed effect of AoI (involved in interaction)
