@@ -10,6 +10,9 @@ rm(list=ls())
 library(cowplot)
 library(dplyr)
 library(wesanderson)
+library(tidyr)
+library(ggplot2)
+library(forcats)
 ```
 ##Plot for Exp. 2
 ```{r}
@@ -192,7 +195,8 @@ data1.long <- data1 %>%
   select(trialtype_agent, first_fix_old_goal = first_fix_old_goal_mean, first_fix_old_side = first_fix_old_side_mean) %>%
   pivot_longer(cols = c(first_fix_old_goal, first_fix_old_side), names_to = "AoI", values_to = "prop.dogs") %>% 
   mutate(experiment=rep("Experiment 1"))%>%
-  full_join(data1.se.long)
+  full_join(data1.se.long) %>% 
+  mutate(trialtype_agent=relevel(trialtype_agent, ref="human"))
 
 al_plot_NAs_included_Exp1<-ggplot(data1.long, aes(x = trialtype_agent, y = prop.dogs, fill = AoI)) +
   geom_bar(stat="identity", position = position_dodge(0.9), alpha=0.8) + 
