@@ -27,7 +27,7 @@ load("workspaces/AL_test_first4s.RData")
 ```
 
 ```{r}
-#save.image("workspaces/AL_test_first4s.RData")
+load("workspaces/AL_test_first4s.RData")
 ```
 
 
@@ -857,6 +857,28 @@ first4s.dwell.time.descr <- first4s.data %>%
   group_by(trialtype_agent,AoI) %>% 
   summarise(mean_prop_dwell_time = mean(prop_dwell_time),
             sd_prop_dwell_time = sd(prop_dwell_time))
+
+#are there statistical differences in the prop. looking time to the old identity and old side object?
+first4s.dwell.time.for.t.test <- first4s.data %>%
+  filter(condition != "fam") %>% #keep only test trials
+  filter(grepl("AL", IA_LABEL)) %>% #keep only AL AoIs (smaller)
+  select(
+    subject,
+    session_number,
+    IA_fam_object ,
+    trialtype_agent,
+    IA_DWELL_TIME
+  ) %>%
+  pivot_wider(names_from = IA_fam_object, values_from = IA_DWELL_TIME) %>% 
+   mutate(prop_time_old_goal = old_goal_new_side / (old_goal_new_side + new_goal_old_side),
+          prop_time_old_side = new_goal_old_side / (new_goal_old_side + old_goal_new_side)) %>% 
+  pivot_longer(cols=c(prop_time_old_goal, prop_time_old_side), names_to = "AoI", values_to = "prop_dwell_time") %>% 
+  mutate(prop_dwell_time=replace_na(prop_dwell_time,0)) %>% #assign a prop. dwell time of 0 if dogs never looked into the AoIs.
+  group_by(subject, AoI) %>% 
+  summarise(mean_prop_dwell_time = mean(prop_dwell_time)) %>% 
+  pivot_wider(names_from = AoI, values_from = mean_prop_dwell_time)
+
+t.test(first4s.dwell.time.for.t.test$prop_time_old_goal, first4s.dwell.time.for.t.test$prop_time_old_side, paired=TRUE, alternative = "two.sided")
 ```
 
 
