@@ -6,7 +6,7 @@ date: "`r Sys.Date()`"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-#rm(list=c("object_pref_data"))
+#rm(list=ls())
 library(tidyverse)
 #library(arrow)
 library(lme4)
@@ -22,8 +22,7 @@ source("./functions/glmmTMB_stability.r")
 source("./functions/boot_glmmTMB.r")
 source("./functions/extract_ranef_gmmTMB.r")
 
-load("./workspaces/ET_dog_woodward_kano_paradigm_familiarisation.RData")
-
+load("./experiment_1/workspaces/ET_dog_woodward_kano_paradigm_familiarisation.RData")
 ```
 Find the first look to object after first look at agent. Delete samples before the agent was looked at. Agent starts moving immediately (327 ms into the video) in these videos, hence we only delete samples preceding the first look to the agent, but not samples before the agent starts moving.
 
@@ -36,14 +35,14 @@ Hand visually overlaps with duck: IP time: 1162, frame 30
 ## load demoraphic data
 
 ```{r}
-demo.data <- read_csv("data/Woodward_Kano_ counterbalancing.csv")%>%
+demo.data <- read_csv("experiment_1/data/Woodward_Kano_ counterbalancing.csv")%>%
   mutate(EDF1=fct_recode(as.factor(EDF1), "Georgia_1"="Georgia1"))%>%
   separate(EDF1, c("subject", "num"), sep="_") %>%
   select(-"num")
 ```
 load sample data and add the demographic data
 ```{r}
-sample.data<-read_parquet("data/dog_woodward_paradigm_Sample_Report_with_agents_AOIs_test.parquet")
+sample.data<-read_parquet("experiment_1/data/dog_woodward_paradigm_Sample_Report_with_agents_AOIs_test.parquet")
 
 levels(as.factor(sample.data$RECORDING_SESSION_LABEL))
 str(sample.data)

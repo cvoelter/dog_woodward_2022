@@ -16,12 +16,12 @@ source("./functions/diagnostic_fcns.r")
 source("./functions/glmm_stability.r")
 source("./functions/boot_glmm.r")
 source("./functions/boot_glmm2.r")
-load("./workspaces/Looking_times.RData")
+load("./experiment_2/workspaces/Looking_times.RData")
 ```
 
 ## Import the data
 ```{r}
-demo.data <- read_csv("data/Woodward_2022_counterbalancing.csv") %>%
+demo.data <- read_csv("experiment_2/data/Woodward_2022_counterbalancing.csv") %>%
   mutate(
     EDF1 = fct_recode(
       as.factor(EDF1),
@@ -34,7 +34,7 @@ demo.data <- read_csv("data/Woodward_2022_counterbalancing.csv") %>%
 ```{r}
 after_agent_dir_cue.data <-
   read_delim(
-    "data/Woodward2022_IA_Report_for_combined-agent-object_analysis_IP_after_agent_directional_cue.txt",
+    "experiment_2/data/Woodward2022_IA_Report_for_combined-agent-object_analysis_IP_after_agent_directional_cue.txt",
     na = ".",
     delim = "\t"
   ) %>%

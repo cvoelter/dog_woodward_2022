@@ -22,7 +22,7 @@ source("./functions/glmmTMB_stability.r")
 source("./functions/boot_glmmTMB.r")
 source("./functions/extract_ranef_gmmTMB.r")
 
-load("./workspaces/fam.RData")
+load("./experiment_2/workspaces/fam.RData")
 
 ```
 Find the first fixation to object after first fixation at agent and after agent started moving (at around 1600). Delete samples before the agent was looked at and before agent started moving. 
@@ -35,7 +35,7 @@ agent_start_time <- 1600
 ## load data
 
 ```{r}
-demo.data <- read_csv("data/Woodward_2022_counterbalancing.csv") %>%
+demo.data <- read_csv("experiment_2/data/Woodward_2022_counterbalancing.csv") %>%
   mutate(
     EDF1 = fct_recode(
       as.factor(EDF1),
@@ -47,7 +47,7 @@ demo.data <- read_csv("data/Woodward_2022_counterbalancing.csv") %>%
 ```
 load sample data and add the demographic data
 ```{r}
-sample.data<-read_parquet("data/Woodward2022_Sample_Report.parquet") %>%
+sample.data<-read_parquet("experiment_2/data/Woodward2022_Sample_Report.parquet") %>%
     filter(RECORDING_SESSION_LABEL != "Melody_1", RECORDING_SESSION_LABEL != "Mia_5") %>%
   filter(RECORDING_SESSION_LABEL != "Timo_5", RECORDING_SESSION_LABEL != "Joker_5") %>%
   separate(RECORDING_SESSION_LABEL, c("subject", "num"), sep = "_")%>%

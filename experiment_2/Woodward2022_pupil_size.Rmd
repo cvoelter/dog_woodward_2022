@@ -52,7 +52,7 @@ str(xx)
 baseline.end<-4000 #frozen frame with agent centered between objects (IP time, in ms)
 #agents' directional cue finishes around frame 493 (4930 ms)
 
-demo.data <- read_csv("data/Woodward_2022_counterbalancing.csv") %>%
+demo.data <- read_csv("experiment_2/data/Woodward_2022_counterbalancing.csv") %>%
   mutate(
     EDF1 = fct_recode(
       as.factor(EDF1),
@@ -64,7 +64,7 @@ demo.data <- read_csv("data/Woodward_2022_counterbalancing.csv") %>%
 ```
 load sample data and add the demographic data
 ```{r}
-sample.data<-read_parquet("data/Woodward2022_Sample_Report.parquet") %>%
+sample.data<-read_parquet("experiment_2/data/Woodward2022_Sample_Report.parquet") %>%
    mutate(RECORDING_SESSION_LABEL=fct_recode(RECORDING_SESSION_LABEL,  Georgia_2="Georgia2",Georgia_1="Georgia1", Georgia_3="Georgia3", Georgia_4="Georgia4"))%>%
   filter(RECORDING_SESSION_LABEL != "Melody_1", RECORDING_SESSION_LABEL != "Mia_5") %>%
   filter(RECORDING_SESSION_LABEL != "Timo_5", RECORDING_SESSION_LABEL != "Joker_5") %>%

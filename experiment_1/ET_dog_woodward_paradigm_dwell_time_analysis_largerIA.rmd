@@ -22,7 +22,7 @@ source("./functions/boot_glmm2.r")
 source("./functions/glmmTMB_stability.r")
 source("./functions/boot_glmmTMB.r")
 source("./functions/extract_ranef_gmmTMB.r")
-load("./workspaces/ET_dog_woodward_kano_paradigm.RData")
+load("./experiment_1/workspaces/ET_dog_woodward_kano_paradigm.RData")
 
 ```
 
@@ -30,11 +30,11 @@ load("./workspaces/ET_dog_woodward_kano_paradigm.RData")
 ### End IP
 
 ```{r}
-end.ip.orig.data <- read_delim("data/dog_woodward_paradigm_IA_report_largeAOI_video_IP_end.txt", na=".", delim="\t")
+end.ip.orig.data <- read_delim("experiment_1/data/dog_woodward_paradigm_IA_report_largeAOI_video_IP_end.txt", na=".", delim="\t")
 
 levels(as.factor(end.ip.orig.data$IA_LABEL))
 
-demo.data <- read_csv("data/Woodward_Kano_ counterbalancing.csv")%>%
+demo.data <- read_csv("experiment_1/data/Woodward_Kano_ counterbalancing.csv")%>%
   mutate(EDF1=fct_recode(as.factor(EDF1), "Georgia_1"="Georgia1"))%>%
   separate(EDF1, c("subject", "num"), sep="_")
 
