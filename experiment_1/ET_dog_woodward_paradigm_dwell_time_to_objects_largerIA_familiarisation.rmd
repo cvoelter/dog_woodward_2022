@@ -1,0 +1,322 @@
+---
+title: "Looking time to objects familiarisation"
+author: "Lucrezia Lonardo"
+date: "2024-02-12"
+output: html_document
+---
+Plot looking times to target and distractor during the whole duration of the familiarisation 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##Set up environment
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(arrow)
+library(summarytools)
+library(exactRankTests)
+library(ggpubr)
+library(wesanderson)
+```
+
+
+## LL: Ignore for now. Import data - IA report
+
+```{r cars}
+video.ip.orig.data <- read_delim("experiment_1/data/dog_woodward_paradigm_IA_report_largeAOI_video_IP.txt", na=".", delim="\t")
+
+levels(as.factor(video.ip.orig.data$IA_LABEL))
+str(video.ip.orig.data)
+
+demo.data <- read_csv("data/Woodward_Kano_ counterbalancing.csv")%>%
+  mutate(EDF1=fct_recode(as.factor(EDF1), "Georgia_1"="Georgia1"))%>%
+  separate(EDF1, c("subject", "num"), sep="_") %>% 
+  mutate(target_location=ifelse(target=="duck", "down", 
+                         ifelse(target=="frog", "up", "NA")))
+
+
+
+end.ip.data <- end.ip.orig.data %>%
+  select(Session_Name_, IP_LABEL, IA_LABEL,IA_ID, Trial_Index_, condition,  target, target_location, session, trial_within_block, video_file,  video_latency, DATA_FILE,  IA_AREA, IA_AVERAGE_FIX_PUPIL_SIZE,  IA_DWELL_TIME, "IA_DWELL_TIME_%", IA_FIXATION_COUNT, IA_MAX_FIX_PUPIL_SIZE, INTEREST_AREA_FIXATION_SEQUENCE, TRIAL_DWELL_TIME, TRIAL_FIXATION_COUNT, TRIAL_IA_COUNT, TRIAL_TOTAL_VISITED_IA_COUNT, IA_FIRST_FIXATION_TIME )%>%
+  mutate(Session_Name_=fct_recode(Session_Name_, Georgia_1="Georgia1",Georgia_2="Georgia2", Georgia_3="Georgia3",Georgia_4="Georgia4" ))%>%
+  separate(Session_Name_, c("subject", "session.num"), sep = "_") %>%
+  mutate(condition_trial=paste(condition, "_", trial_within_block))%>%
+  full_join(demo.data)
+  
+
+
+video.ip.data.wider <- video.ip.data %>%
+  select(
+    subject,
+    session.num,
+    condition_trial,
+    IP_LABEL,
+    IA_LABEL,
+    condition,
+    condition_first,
+    target,
+    target_location,
+    session,
+    trial_within_block,
+    video_file,
+    video_latency,
+    DATA_FILE,
+    IA_DWELL_TIME
+  ) %>%
+  pivot_wider(names_from = IA_LABEL, values_from = IA_DWELL_TIME) %>%
+  mutate(
+    object_congruent_dwell_time = as.numeric(ifelse( #consider replacing object_congruent with target
+      target_location == "up",
+      lower_IA_large,
+      ifelse(target_location == "down", upper_IA_large, "")
+    )),
+    object_IA_dwell_time = lower_IA_large + upper_IA_large,
+    object_incongruent_dwell_time = as.numeric(ifelse( #consider replacing object_incongruent with distractor
+      target_location == "up",
+      upper_IA_large,
+      ifelse(target_location == "down", lower_IA_large, "")
+    ))
+  ) %>%
+  select(-lower_IA_large,-upper_IA_large) %>%
+  pivot_longer(
+    cols = c(object_congruent_dwell_time, object_incongruent_dwell_time),
+    names_to = "object_congruent",
+    values_to = "dwell_time"
+  ) %>%
+  mutate(
+    proportion.object.congruent.dwell.time = dwell_time / object_IA_dwell_time,
+    proportion.object.congruent.dwell.time_noNA = as.numeric(ifelse(
+      is.na(proportion.object.congruent.dwell.time),
+      0,
+      proportion.object.congruent.dwell.time
+    )
+    ))
+
+```
+## Import data - sample report
+
+## load demoraphic data
+
+```{r}
+demo.data <- read_csv("data/Woodward_Kano_ counterbalancing.csv")%>%
+  mutate(EDF1=fct_recode(as.factor(EDF1), "Georgia_1"="Georgia1"))%>%
+  separate(EDF1, c("subject", "num"), sep="_") %>%
+  select(-"num")
+```
+##Load sample report
+```{r}
+sample.data<-read_parquet("data/dog_woodward_paradigm_Sample_Report_with_agents_AOIs_test.parquet")
+
+levels(as.factor(sample.data$RECORDING_SESSION_LABEL))
+str(sample.data)
+
+sample.data<- sample.data %>% 
+  mutate(RECORDING_SESSION_LABEL=fct_recode(
+    RECORDING_SESSION_LABEL,
+              Georgia_1="Georgia1",
+              Georgia_2="Georgia2",
+              Georgia_3="Georgia3",
+              Georgia_4="Georgia4"
+  ))
+
+levels(as.factor(sample.data$RECORDING_SESSION_LABEL))
+
+sample.data<- sample.data %>% 
+  separate(RECORDING_SESSION_LABEL, c("subject", "num"), sep = "_")%>%
+  full_join(demo.data)%>%
+  mutate(time = TIMESTAMP - IP_START_TIME) %>% 
+  mutate(condition_trial=paste(condition, "_", trial_within_block))
+
+table(sample.data$subject, sample.data$condition_trial)
+```
+
+first trial (whole video)
+```{r}
+levels(as.factor(sample.data$RIGHT_INTEREST_AREAS))
+levels(as.factor(sample.data$RIGHT_INTEREST_AREA_LABEL))
+
+sample.data.ft <- sample.data %>%
+  filter(time < 2400) %>% #keep only the first trial of the familiarisation (including grey screen at end of trial, to accommodate for dogs' slower fixations)
+  #mutate(ref_time = time - agent_arrival_time)%>%
+  mutate(
+    overlapping_IA = ifelse(
+        RIGHT_INTEREST_AREAS == "[ 3, 5 ]" |
+        RIGHT_INTEREST_AREAS == "[ 4, 5 ]" |
+        RIGHT_INTEREST_AREAS == "[ 3, 6 ]" |
+        RIGHT_INTEREST_AREAS == "[ 4, 6 ]",
+      "agent_object",
+      ifelse(
+        RIGHT_INTEREST_AREAS == "[ 4 ]" |
+        RIGHT_INTEREST_AREAS == "[ 3 ]",
+        "object",
+        ifelse(
+          RIGHT_INTEREST_AREAS == "[ 5 ]" |
+          RIGHT_INTEREST_AREAS == "[ 6 ]",
+          "agent",
+          ""
+        )
+      )
+    )
+  ) %>%
+  mutate(IA_LABEL = ifelse(
+    RIGHT_INTEREST_AREA_LABEL %in% c(
+      "lower_IA_large",
+      "upper_IA_large"
+    ),
+    RIGHT_INTEREST_AREA_LABEL,
+    ""
+  )) 
+
+str(sample.data.ft)
+```
+
+
+## Calculate dwell times whole trial
+```{r}
+lt.data.ft<-sample.data.ft%>%
+  filter(RIGHT_INTEREST_AREA_LABEL=="lower_IA_large" | RIGHT_INTEREST_AREA_LABEL=="upper_IA_large")%>%
+  #mutate(ia_size=1/RIGHT_INTEREST_AREA_PIXEL_AREA)%>%
+  group_by(subject, condition, trial_within_block, RIGHT_INTEREST_AREA_LABEL, target_location)%>%
+  dplyr::summarise(dwell_time=n())%>%#count number of rows
+  ungroup()%>%
+  select(subject, condition, trial_within_block, RIGHT_INTEREST_AREA_LABEL, dwell_time, target_location)%>%
+  complete(subject, condition, trial_within_block, RIGHT_INTEREST_AREA_LABEL, fill=list(dwell_time=0))%>% #fill in 0s
+  full_join(demo.data)%>%
+  fill(target_location)
+
+#manually fill in the remaining NA in target location
+lt.data.ft$target_location[1]<-"down"
+
+#create variable ("AoI") indicating whether the fixated AoI contains target or distractor
+lt.data.ft<-lt.data.ft %>% 
+  mutate(AoI=ifelse((target_location=="down" & RIGHT_INTEREST_AREA_LABEL=="lower_IA_large") | 
+                     (target_location=="up" & RIGHT_INTEREST_AREA_LABEL=="upper_IA_large"), "target",
+                    ifelse((target_location=="down" & RIGHT_INTEREST_AREA_LABEL=="upper_IA_large") | 
+                     (target_location=="up" & RIGHT_INTEREST_AREA_LABEL=="lower_IA_large"), "distractor", "NA")))
+#check
+sum(is.na(lt.data.ft$AoI))
+
+lt.data.ft.for.plot<-lt.data.ft %>% 
+  group_by(subject,AoI) %>% 
+  summarise(mean_lt=mean(dwell_time))
+```
+##Plot looking times whole trial
+
+```{r}
+p.lt.ft.whole.video<-ggplot(data=lt.data.ft.for.plot, aes(x=AoI, y=mean_lt))+
+  geom_boxplot()+
+ # ylim(0, 1200)+
+  geom_jitter(alpha = 0.3,
+                width = 0.2)+
+  ylab("Mean looking times (ms)")+ #mean looking times across 4 fam trials per agent (tot. 8 "first" fam trials)
+  xlab("Object")+
+  theme_classic()
+  
+p.lt.ft.whole.video
+```
+##Save plot whole video
+```{r}
+ggsave(filename="graphs/lt_to_objects_first_trial_fam_whole_video.png",
+  plot = p.lt.ft.whole.video,
+  width=5,
+  height=5,
+  scale=.6,
+  dpi=1200)
+```
+
+## Subdivide looking times in different IPs: 
+when the agent is still = 0-300 ms
+when the agent is approaching = 301-1530 ms
+when the agent is grasping = 1531-2400
+
+Note that there are slight differences between the timings of movements of the hand and claw, these are approximations
+```{r}
+sample.data.ft.IPs <- sample.data.ft %>%
+  mutate(IP=ifelse(time < 301, "Agents still", 
+            ifelse(time > 300 & time < 1531, "Agents approaching",
+            ifelse(time > 1530, "Agents grasping", "NA"))))
+#check
+sum(sample.data.ft.IPs$IP=="NA")
+levels(as.factor(sample.data.ft.IPs$IP))
+
+#LL: potentially delete
+# sample.data.ft.agents.still <- sample.data.ft %>%
+#   filter(time < 301) 
+# 
+# sample.data.ft.agents.approaching <- sample.data.ft %>%
+#   filter(time > 300 & time < 1531) 
+# 
+# sample.data.ft.agents.grasping <- sample.data.ft %>%
+#   filter(time > 1530) 
+# rm(list=c("sample.data.ft.agents.still", "sample.data.ft.agents.approaching", "sample.data.ft.agents.grasping"))
+  
+```
+## Calculate dwell times to objects - different IPs
+```{r}
+lt.data.ft.IPs<-sample.data.ft.IPs %>%
+  filter(RIGHT_INTEREST_AREA_LABEL=="lower_IA_large" | RIGHT_INTEREST_AREA_LABEL=="upper_IA_large")%>%
+  group_by(subject, condition, trial_within_block, RIGHT_INTEREST_AREA_LABEL, IP, target_location)%>%
+  dplyr::summarise(dwell_time=n())%>%#count number of rows
+  ungroup()%>%
+  select(subject, condition, trial_within_block, RIGHT_INTEREST_AREA_LABEL, dwell_time, IP, target_location)%>%
+  complete(subject, condition, trial_within_block, RIGHT_INTEREST_AREA_LABEL, IP, fill=list(dwell_time=0))%>% #fill in 0s
+  full_join(demo.data)%>%
+  # group_by(subject)
+  fill(target_location, .direction= "downup")
+
+#check
+table(lt.data.ft.IPs$target_location, lt.data.ft.IPs$subject)
+
+#correct manually Asta's target location
+lt.data.ft.IPs$target_location[lt.data.ft.IPs$subject=="Asta"]<- "up"
+
+#check again
+table(lt.data.ft.IPs$target_location, lt.data.ft.IPs$subject)
+
+
+#create variable ("AoI") indicating whether the fixated AoI contains target or distractor
+lt.data.ft.IPs<-lt.data.ft.IPs %>% 
+  mutate(AoI=ifelse((target_location=="down" & RIGHT_INTEREST_AREA_LABEL=="lower_IA_large") | 
+                     (target_location=="up" & RIGHT_INTEREST_AREA_LABEL=="upper_IA_large"), "target",
+                    ifelse((target_location=="down" & RIGHT_INTEREST_AREA_LABEL=="upper_IA_large") | 
+                     (target_location=="up" & RIGHT_INTEREST_AREA_LABEL=="lower_IA_large"), "distractor", "NA")))
+#check
+sum(lt.data.ft.IPs$AoI=="NA")
+
+lt.data.ft.for.plot.IPs<-lt.data.ft.IPs %>% 
+  mutate(IP=factor(IP, levels=c("Agents still", "Agents approaching", "Agents grasping"))) %>% 
+  mutate(AoI=as.factor(AoI)) %>% 
+  group_by(subject,AoI, IP) %>% 
+  summarise(mean_lt=mean(dwell_time))
+```
+##Plot looking times
+
+```{r}
+p.lt.ft.IPs<-ggplot(data=lt.data.ft.for.plot.IPs,
+  aes(x=IP, y=mean_lt, fill=AoI))+
+  geom_boxplot()+
+ # ylim(0, 1200)+
+  geom_jitter(alpha = 0.3,
+                width = 0.2)+
+  ylab("Mean looking times (ms)")+ #mean looking times across 4 fam trials per agent (tot. 8 "first" fam trials)
+  xlab("Object")+
+  theme_classic()+
+  scale_fill_manual(values=c("#E69F00","#56B4E9"))
+
+p.lt.ft.IPs
+
+# , labels= c("old identity - 
+# new side","old side - 
+# new identity")
+ 
+```
+##Save plot different Ips
+```{r}
+ggsave(filename="graphs/lt_to_objects_first_trial_fam_agents_still.png",
+  plot = p.lt.ft.agents.still,
+  width=5,
+  height=5,
+  scale=.6,
+  dpi=1200)
+```
+

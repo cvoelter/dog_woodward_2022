@@ -26,12 +26,12 @@ source("./functions/extract_ranef_gmmTMB.r")
 ```
 
 ```{r}
-load("experiment_2/workspaces/AL_test_first4s.RData")
+load("workspaces/AL_test_first4s.RData")
 ```
 
 
 ```{r}
-demo.data <- read_csv("experiment_2/data/Woodward_2022_counterbalancing.csv") %>%
+demo.data <- read_csv("data/Woodward_2022_counterbalancing.csv") %>%
   mutate(
     EDF1 = fct_recode(
       as.factor(EDF1),
@@ -44,7 +44,7 @@ demo.data <- read_csv("experiment_2/data/Woodward_2022_counterbalancing.csv") %>
 ```{r}
 first4s.data <-
   read_delim(
-    "experiment_2/data/Woodward2022_IA_Report_IP_test_first_4_sec.txt",
+    "data/Woodward2022_IA_Report_IP_test_first_4_sec.txt",
     na = ".",
     delim = "\t"
   ) %>%
